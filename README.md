@@ -5,7 +5,7 @@
 [![Paper](https://img.shields.io/badge/Paper-API-blue.svg)](https://papermc.io/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A comprehensive referral system plugin for Minecraft servers that rewards players for bringing new members to your community. Features anti-abuse protection, configurable database storage, and flexible reward systems.
+A comprehensive referral system plugin for Minecraft servers that rewards players for bringing new members to your community. Features anti-abuse protection, configurable database storage, Discord webhook integration, and flexible reward systems.
 
 ## ✨ Features
 
@@ -19,6 +19,13 @@ A comprehensive referral system plugin for Minecraft servers that rewards player
 - **YML**: Simple file-based storage (default, no setup required)
 - **SQLite**: Lightweight database file (perfect for medium servers)
 - **MySQL**: Enterprise-grade database with connection pooling (ideal for large networks)
+
+### 🔔 **Discord Integration**
+- **Automated Notifications**: Webhook alerts for admin team when players reach payout thresholds
+- **Rich Embeds**: Professional Discord messages with player info, referral counts, and timestamps
+- **Payout Management**: Automatic notifications when players claim IRL rewards
+- **Player Guidance**: Automatic Discord server invites and ticket creation instructions
+- **Configurable Alerts**: Choose which events trigger Discord notifications
 
 ### 🎮 **Player Commands**
 - `/referral refer <player>` - Refer a new player to the server
@@ -38,6 +45,7 @@ A comprehensive referral system plugin for Minecraft servers that rewards player
 - **Payout Thresholds**: Configure how many referrals needed for rewards
 - **Check Intervals**: Adjust how often the system validates referrals
 - **Database Settings**: Switch between storage types easily
+- **Discord Settings**: Customize webhook behavior and notifications
 
 ## 🚀 Installation
 
@@ -45,13 +53,15 @@ A comprehensive referral system plugin for Minecraft servers that rewards player
 2. **Place** the jar file in your server's `plugins` folder
 3. **Restart** your server
 4. **Configure** the plugin by editing `plugins/Referra/config.yml`
-5. **Reload** the configuration with `/referral admin reload`
+5. **Set up Discord webhooks** (optional but recommended)
+6. **Reload** the configuration with `/referral admin reload`
 
 ### 📋 Requirements
 - **Minecraft**: 1.21 or higher
 - **Server Software**: Paper, Purpur, or other Paper-based servers
 - **Java**: 21 or higher
 - **Database** (optional): MySQL 8.0+ or SQLite support
+- **Discord Server** (optional): For webhook notifications
 
 ## ⚙️ Configuration
 
@@ -76,6 +86,36 @@ database:
   sqlite:
     filename: referrals.db
 
+# Discord Integration
+discord:
+  # Enable Discord webhook notifications
+  enabled: true
+  
+  # Discord webhook URL for admin notifications
+  # Get this from your Discord server settings > Integrations > Webhooks
+  webhook-url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
+  
+  # Discord server invite link (shown to players when they're eligible for payout)
+  server-invite: "https://discord.gg/your-server-invite"
+  
+  # Webhook settings
+  webhook:
+    # Bot name that appears in Discord
+    username: "Referral System"
+    # Bot avatar URL (optional)
+    avatar-url: "https://i.imgur.com/your-avatar.png"
+    # Color for embed messages (in decimal format)
+    embed-color: 5814783  # Gold color
+  
+  # Notification settings
+  notifications:
+    # Notify when player reaches payout threshold
+    threshold-reached: true
+    # Notify when player claims payout
+    payout-claimed: true
+    # Notify when referrals are confirmed
+    referral-confirmed: false
+
 # Referral Settings
 referral:
   # Required playtime in hours before referral confirmation
@@ -88,6 +128,28 @@ referral:
   # Minimum referrals required for IRL payout
   payout-threshold: 100
 ```
+
+### 🔔 Discord Webhook Setup
+
+#### Step 1: Create a Discord Webhook
+1. Go to your Discord server
+2. Navigate to **Server Settings** → **Integrations** → **Webhooks**
+3. Click **New Webhook**
+4. Choose the channel for notifications
+5. Copy the **Webhook URL**
+
+#### Step 2: Configure the Plugin
+```yaml
+discord:
+  enabled: true
+  webhook-url: "https://discord.com/api/webhooks/1234567890/your-webhook-token-here"
+  server-invite: "https://discord.gg/your-server-invite"
+```
+
+#### Step 3: Test the Integration
+- Have a player reach the payout threshold
+- Use `/referral claim` to test payout notifications
+- Check your Discord channel for webhook messages
 
 ### Database Setup Examples
 
@@ -137,6 +199,25 @@ database:
 /referral admin reload          # Reload configuration
 ```
 
+## 🔔 Discord Notifications
+
+The plugin sends rich Discord embeds for important events:
+
+### 🎯 **Player Reaches Threshold**
+- Triggered when a player reaches the payout threshold (default: 100 referrals)
+- Includes player name, referral count, and eligibility status
+- Alerts admins that the player can now claim their reward
+
+### 💰 **Payout Claimed**
+- Triggered when a player uses `/referral claim`
+- Includes player name and total referral count
+- Alerts admins to process the IRL reward
+
+### ✅ **Referral Confirmed** (Optional)
+- Triggered when pending referrals are confirmed
+- Includes referred player, referrer, and new total
+- Disabled by default to reduce spam
+
 ## 🔧 Customization Options
 
 ### Playtime Requirements
@@ -151,6 +232,13 @@ database:
 - **Medium Server**: `payout-threshold: 100` (default)
 - **Large Server**: `payout-threshold: 500`
 
+### Discord Notification Colors
+- **Gold**: `embed-color: 5814783` (default)
+- **Green**: `embed-color: 65280`
+- **Blue**: `embed-color: 255`
+- **Red**: `embed-color: 16711680`
+- **Purple**: `embed-color: 8388736`
+
 ## 📊 How It Works
 
 1. **Player A refers Player B** using `/referral refer PlayerB`
@@ -158,7 +246,9 @@ database:
 3. **System tracks Player B's playtime** using Minecraft's built-in statistics
 4. **After required hours played**, referral automatically becomes "confirmed"
 5. **Player A gets notified** when their referral is confirmed
-6. **Confirmed referrals count** toward leaderboards and payout eligibility
+6. **At 100+ referrals**, Discord webhook alerts admins automatically
+7. **Player uses `/referral claim`** to request payout
+8. **Second Discord notification** sent for payout processing
 
 ## 🛡️ Permissions
 
@@ -180,7 +270,25 @@ boolean hasReferred = dataManager.getPlayerData(playerId, playerName).getReferra
 
 // Get referral count
 int referrals = dataManager.getPlayerData(playerId, playerName).getReferralCount();
+
+// Access Discord webhook manager
+DiscordWebhookManager discordManager = dataManager.getDiscordManager();
 ```
+
+## 🚀 Admin Workflow
+
+### Setting Up Payouts
+1. **Configure Discord webhook** in your admin channel
+2. **Set payout threshold** in config.yml
+3. **Create Discord ticket system** for reward processing
+4. **Train staff** on payout verification process
+
+### Managing Payouts
+1. **Player reaches threshold** → Automatic Discord notification
+2. **Player claims reward** → Second Discord notification with details
+3. **Admin verifies eligibility** through Discord ticket system
+4. **Process IRL reward** (PayPal, gift cards, etc.)
+5. **Mark as completed** in your tracking system
 
 ## 🤝 Contributing
 
@@ -210,6 +318,7 @@ Please use the [GitHub Issues](../../issues) page to:
 - **Performance**: Asynchronous database operations for zero server lag
 - **Scalability**: Supports from small servers to large networks
 - **Reliability**: Transaction-based operations with rollback support
+- **Discord Integration**: Professional webhook notifications for seamless admin workflow
 
 ## 🎖️ Credits
 
