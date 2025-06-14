@@ -331,10 +331,5 @@ Please use the [GitHub Issues](../../issues) page to:
 
 ## 📞 Support
 
-- **Discord**: Join our [Discord Server](https://discord.gg/your-discord)
 - **Issues**: [GitHub Issues](../../issues)
 - **Wiki**: [Plugin Documentation](../../wiki)
-
----
-
-*Made with ❤️ for the Minecraft community*
