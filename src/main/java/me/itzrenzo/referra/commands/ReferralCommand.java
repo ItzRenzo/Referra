@@ -47,8 +47,8 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
             case "help":
                 showHelp(player);
                 break;
-            case "refer":
-                handleRefer(player, args);
+            case "create":
+                handleCreate(player);
                 break;
             case "count":
                 handleCount(player, args);
@@ -66,7 +66,8 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
                 handleAdmin(player, args);
                 break;
             default:
-                showHelp(player);
+                // If it's not a recognized subcommand, treat it as a referrer name
+                handleReferredBy(player, args[0]);
                 break;
         }
         
@@ -76,8 +77,8 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
     private void showHelp(Player player) {
         int payoutThreshold = dataManager.getPayoutThreshold();
         player.sendMessage(Component.text("=== Referral System Help ===").color(NamedTextColor.GOLD));
-        player.sendMessage(Component.text("/referral refer <player>").color(NamedTextColor.YELLOW)
-                .append(Component.text(" - Refer a new player").color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("/referral create").color(NamedTextColor.YELLOW)
+                .append(Component.text(" - Create your referral status").color(NamedTextColor.WHITE)));
         player.sendMessage(Component.text("/referral count [player]").color(NamedTextColor.YELLOW)
                 .append(Component.text(" - Show referral count").color(NamedTextColor.WHITE)));
         player.sendMessage(Component.text("/referral top [page]").color(NamedTextColor.YELLOW)
@@ -98,66 +99,58 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
         }
     }
     
-    private void handleRefer(Player player, String[] args) {
-        if (args.length < 2) {
-            player.sendMessage(Component.text("Usage: /referral refer <player>").color(NamedTextColor.RED));
+    private void handleCreate(Player player) {
+        PlayerReferralData referrerData = dataManager.getPlayerData(player.getUniqueId(), player.getName());
+        
+        if (referrerData.isReferralEnabled()) {
+            player.sendMessage(Component.text("Your referral status is already created!").color(NamedTextColor.RED));
             return;
         }
         
-        String targetName = args[1];
-        Player targetPlayer = Bukkit.getPlayer(targetName);
+        referrerData.setReferralEnabled(true);
+        dataManager.saveData();
         
-        if (targetPlayer == null) {
-            player.sendMessage(Component.text("Player '" + targetName + "' is not online or doesn't exist!").color(NamedTextColor.RED));
+        player.sendMessage(Component.text("Your referral status has been created!").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.text("Share your player name with new players to get referrals!").color(NamedTextColor.YELLOW));
+    }
+    
+    private void handleReferredBy(Player player, String referrerName) {
+        Player referrer = Bukkit.getPlayer(referrerName);
+        
+        if (referrer == null) {
+            player.sendMessage(Component.text("Player '" + referrerName + "' is not online or doesn't exist!").color(NamedTextColor.RED));
             return;
         }
         
-        if (player.getUniqueId().equals(targetPlayer.getUniqueId())) {
+        if (referrer.equals(player)) {
             player.sendMessage(Component.text("You cannot refer yourself!").color(NamedTextColor.RED));
             return;
         }
         
-        if (dataManager.isPlayerReferred(targetPlayer.getUniqueId())) {
-            player.sendMessage(Component.text("This player has already been referred by someone else!").color(NamedTextColor.RED));
-            return;
-        }
+        PlayerReferralData referrerData = dataManager.getPlayerData(referrer.getUniqueId(), referrer.getName());
         
-        PlayerReferralData referrerData = dataManager.getPlayerData(player.getUniqueId(), player.getName());
         if (!referrerData.isReferralEnabled()) {
-            player.sendMessage(Component.text("Your referral system is currently disabled!").color(NamedTextColor.RED));
+            player.sendMessage(Component.text("Player '" + referrerName + "' does not have referral system enabled!").color(NamedTextColor.RED));
             return;
         }
         
-        if (dataManager.addReferral(player.getUniqueId(), targetPlayer.getUniqueId())) {
-            player.sendMessage(Component.text("Successfully referred " + targetPlayer.getName() + "!").color(NamedTextColor.GREEN));
+        // Check if player is already referred
+        if (dataManager.isPlayerReferred(player.getUniqueId())) {
+            player.sendMessage(Component.text("You have already been referred by someone!").color(NamedTextColor.RED));
+            return;
+        }
+        
+        // Add the referral
+        boolean success = dataManager.addReferral(referrer.getUniqueId(), player.getUniqueId());
+        
+        if (success) {
+            player.sendMessage(Component.text("You have been referred by " + referrer.getName() + "!").color(NamedTextColor.GREEN));
+            referrer.sendMessage(Component.text("You have a new referral: " + player.getName()).color(NamedTextColor.GREEN));
             
-            // Show different messages based on whether playtime requirement is enabled
-            if (dataManager.isPlaytimeRequirementDisabled()) {
-                player.sendMessage(Component.text("Referral confirmed immediately!").color(NamedTextColor.GREEN));
-            } else {
-                long hours = dataManager.getRequiredPlaytimeHours();
-                long days = hours / 24;
-                if (days > 0) {
-                    player.sendMessage(Component.text("Note: This referral will count after they play for " + 
-                            days + " day" + (days != 1 ? "s" : "") + " (" + hours + " hours).").color(NamedTextColor.YELLOW));
-                } else {
-                    player.sendMessage(Component.text("Note: This referral will count after they play for " + 
-                            hours + " hour" + (hours != 1 ? "s" : "") + ".").color(NamedTextColor.YELLOW));
-                }
-            }
-            
-            player.sendMessage(Component.text("Confirmed referrals: " + referrerData.getReferralCount() + 
-                    " | Pending: " + referrerData.getPendingCount()).color(NamedTextColor.GRAY));
-            
-            targetPlayer.sendMessage(Component.text("You have been referred by " + player.getName() + "!").color(NamedTextColor.GREEN));
-            if (!dataManager.isPlaytimeRequirementDisabled()) {
-                long hours = dataManager.getRequiredPlaytimeHours();
-                targetPlayer.sendMessage(Component.text("Welcome to the server! Play for " + hours + " hours to confirm this referral.").color(NamedTextColor.YELLOW));
-            } else {
-                targetPlayer.sendMessage(Component.text("Welcome to the server!").color(NamedTextColor.YELLOW));
-            }
+            // Save data
+            dataManager.saveData();
         } else {
-            player.sendMessage(Component.text("Failed to refer this player. They may already be referred.").color(NamedTextColor.RED));
+            player.sendMessage(Component.text("Failed to add referral. You may already be referred by someone.").color(NamedTextColor.RED));
         }
     }
     
@@ -451,7 +444,7 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
         
         if (args.length == 1) {
-            List<String> subCommands = Arrays.asList("help", "refer", "count", "top", "claim", "toggle");
+            List<String> subCommands = Arrays.asList("help", "create", "count", "top", "claim", "toggle");
             if (sender.hasPermission("referral.admin")) {
                 subCommands = new ArrayList<>(subCommands);
                 subCommands.add("admin");
