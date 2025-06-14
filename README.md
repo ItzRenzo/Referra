@@ -28,7 +28,8 @@ A comprehensive referral system plugin for Minecraft servers that rewards player
 - **Configurable Alerts**: Choose which events trigger Discord notifications
 
 ### 🎮 **Player Commands**
-- `/referral refer <player>` - Refer a new player to the server
+- `/referral create` - Create your referral status (required to receive referrals)
+- `/referral referredby <player>` - Set who referred you to the server
 - `/referral count [player]` - View referral statistics
 - `/referral top [page]` - Browse the referral leaderboard
 - `/referral claim` - Claim IRL payout rewards
@@ -185,11 +186,12 @@ database:
 
 ### For Players
 ```
-/referral refer Steve        # Refer player "Steve"
-/referral count              # Check your referral stats
-/referral top                # View leaderboard
-/referral claim              # Claim your 100+ referral reward
-/referral toggle off         # Temporarily disable your referrals
+/referral create                # Initialize your referral status
+/referral referredby Steve       # Set Steve as your referrer
+/referral count                  # Check your referral stats
+/referral top                    # View leaderboard
+/referral claim                  # Claim your 100+ referral reward
+/referral toggle off             # Temporarily disable your referrals
 ```
 
 ### For Admins
@@ -241,14 +243,15 @@ The plugin sends rich Discord embeds for important events:
 
 ## 📊 How It Works
 
-1. **Player A refers Player B** using `/referral refer PlayerB`
-2. **Referral starts as "pending"** until playtime requirement is met
-3. **System tracks Player B's playtime** using Minecraft's built-in statistics
-4. **After required hours played**, referral automatically becomes "confirmed"
-5. **Player A gets notified** when their referral is confirmed
-6. **At 100+ referrals**, Discord webhook alerts admins automatically
-7. **Player uses `/referral claim`** to request payout
-8. **Second Discord notification** sent for payout processing
+1. **Player A creates referral status** using `/referral create`
+2. **Player B joins the server** and uses `/referral referredby PlayerA`
+3. **Referral starts as "pending"** until playtime requirement is met
+4. **System tracks Player B's playtime** using Minecraft's built-in statistics
+5. **After required hours played**, referral automatically becomes "confirmed"
+6. **Player A gets notified** when their referral is confirmed
+7. **At 100+ referrals**, Discord webhook alerts admins automatically
+8. **Player A uses `/referral claim`** to request payout
+9. **Second Discord notification** sent for payout processing
 
 ## 🛡️ Permissions
 
