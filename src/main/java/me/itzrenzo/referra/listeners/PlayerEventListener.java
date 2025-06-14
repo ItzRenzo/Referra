@@ -32,6 +32,10 @@ public class PlayerEventListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         
+        // Record player's IP address for anti-abuse protection
+        String playerIP = player.getAddress().getAddress().getHostAddress();
+        dataManager.recordPlayerIP(player.getUniqueId(), playerIP);
+        
         // Record first join time if this is their first time
         dataManager.recordFirstJoin(player.getUniqueId());
         

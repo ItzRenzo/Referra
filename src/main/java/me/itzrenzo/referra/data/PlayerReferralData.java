@@ -5,6 +5,8 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
 
 public class PlayerReferralData {
     private final UUID playerId;
@@ -55,12 +57,28 @@ public class PlayerReferralData {
         pendingReferrals.remove(referredPlayerId);
     }
     
+    public boolean removePayoutReferrals(int payoutThreshold) {
+        if (confirmedReferrals.size() < payoutThreshold) {
+            return false; // Not enough referrals to remove
+        }
+        
+        // Convert to list to get first N referrals
+        List<UUID> referralsList = new ArrayList<>(confirmedReferrals);
+        
+        // Remove the first N referrals (where N = payoutThreshold)
+        for (int i = 0; i < payoutThreshold && i < referralsList.size(); i++) {
+            confirmedReferrals.remove(referralsList.get(i));
+        }
+        
+        return true;
+    }
+    
     public boolean canClaimPayout(int payoutThreshold) {
-        return getReferralCount() >= payoutThreshold && !hasClaimedPayout;
+        return getReferralCount() >= payoutThreshold;
     }
     
     // Keep backward compatibility
     public boolean canClaimPayout() {
-        return getReferralCount() >= 100 && !hasClaimedPayout;
+        return getReferralCount() >= 100;
     }
 }

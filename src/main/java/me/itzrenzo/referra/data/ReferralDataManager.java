@@ -17,6 +17,7 @@ public class ReferralDataManager {
     private final Map<UUID, PlayerReferralData> playerData;
     private final Map<UUID, UUID> referredBy; // Maps referred player ID to referrer ID
     private final Map<UUID, Long> playerFirstJoinTime; // Maps player ID to first join timestamp
+    private final Map<UUID, String> playerIPs; // Maps player ID to IP address for anti-abuse
     
     // Configuration values - loaded from config.yml
     private long requiredPlaytimeHours;
@@ -35,6 +36,7 @@ public class ReferralDataManager {
         this.playerData = new HashMap<>();
         this.referredBy = new HashMap<>();
         this.playerFirstJoinTime = new HashMap<>();
+        this.playerIPs = new HashMap<>();
         
         // Load configuration
         loadConfiguration();
@@ -89,14 +91,15 @@ public class ReferralDataManager {
             }
         }
         
-        // Initialize database asynchronously
-        databaseManager.initialize().thenRun(() -> {
+        // Initialize database synchronously during startup
+        try {
+            databaseManager.initialize().get(); // Wait for initialization to complete
             plugin.getLogger().info("Database initialized: " + databaseManager.getDatabaseType());
-        }).exceptionally(throwable -> {
-            plugin.getLogger().severe("Failed to initialize database: " + throwable.getMessage());
-            throwable.printStackTrace();
-            return null;
-        });
+        } catch (Exception e) {
+            plugin.getLogger().severe("Failed to initialize database: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Database initialization failed", e);
+        }
     }
     
     public void reloadConfiguration() {
@@ -128,20 +131,40 @@ public class ReferralDataManager {
     }
     
     public void loadData() {
-        databaseManager.loadAllPlayerData().thenAccept(loadedPlayerData -> {
+        try {
+            // Load data synchronously during startup to ensure it's available immediately
+            plugin.getLogger().info("Loading referral data from database...");
+            
+            // Load player data
+            Map<UUID, PlayerReferralData> loadedPlayerData = databaseManager.loadAllPlayerData().get();
             playerData.clear();
             playerData.putAll(loadedPlayerData);
-        });
-        
-        databaseManager.loadReferralMappings().thenAccept(mappings -> {
+            plugin.getLogger().info("Loaded " + playerData.size() + " player records");
+            
+            // Load referral mappings
+            Map<UUID, UUID> mappings = databaseManager.loadReferralMappings().get();
             referredBy.clear();
             referredBy.putAll(mappings);
-        });
-        
-        databaseManager.loadFirstJoinTimes().thenAccept(firstJoinTimes -> {
+            plugin.getLogger().info("Loaded " + referredBy.size() + " referral mappings");
+            
+            // Load first join times
+            Map<UUID, Long> firstJoinTimes = databaseManager.loadFirstJoinTimes().get();
             playerFirstJoinTime.clear();
             playerFirstJoinTime.putAll(firstJoinTimes);
-        });
+            plugin.getLogger().info("Loaded " + playerFirstJoinTime.size() + " first join times");
+            
+            // Load player IPs
+            Map<UUID, String> ipMappings = databaseManager.loadPlayerIPs().get();
+            playerIPs.clear();
+            playerIPs.putAll(ipMappings);
+            plugin.getLogger().info("Loaded " + playerIPs.size() + " player IP mappings");
+            
+            plugin.getLogger().info("Referral data loading completed successfully!");
+            
+        } catch (Exception e) {
+            plugin.getLogger().severe("Failed to load referral data from database: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     public void saveData() {
@@ -158,6 +181,51 @@ public class ReferralDataManager {
             playerFirstJoinTime.put(playerId, timestamp);
             databaseManager.saveFirstJoinTime(playerId, timestamp);
         }
+    }
+    
+    public void recordPlayerIP(UUID playerId, String ipAddress) {
+        playerIPs.put(playerId, ipAddress);
+        databaseManager.savePlayerIP(playerId, ipAddress);
+    }
+    
+    public boolean hasSameIPReferral(UUID referrerId, UUID referredId) {
+        String referrerIP = playerIPs.get(referrerId);
+        String referredIP = playerIPs.get(referredId);
+        
+        // If we don't have IP data for either player, allow the referral
+        if (referrerIP == null || referredIP == null) {
+            return false;
+        }
+        
+        // Check if they have the same IP address
+        return referrerIP.equals(referredIP);
+    }
+    
+    public long countReferralsFromSameIP(UUID referrerId, String ipAddress) {
+        if (ipAddress == null) return 0;
+        
+        PlayerReferralData referrerData = playerData.get(referrerId);
+        if (referrerData == null) return 0;
+        
+        long count = 0;
+        
+        // Check confirmed referrals
+        for (UUID referredId : referrerData.getConfirmedReferrals()) {
+            String referredIP = playerIPs.get(referredId);
+            if (ipAddress.equals(referredIP)) {
+                count++;
+            }
+        }
+        
+        // Check pending referrals
+        for (UUID referredId : referrerData.getPendingReferrals().keySet()) {
+            String referredIP = playerIPs.get(referredId);
+            if (ipAddress.equals(referredIP)) {
+                count++;
+            }
+        }
+        
+        return count;
     }
     
     public boolean hasPlayedRequiredTime(Player player) {
@@ -185,6 +253,12 @@ public class ReferralDataManager {
         
         PlayerReferralData referrerData = playerData.get(referrerId);
         if (referrerData == null || !referrerData.isReferralEnabled()) {
+            return false;
+        }
+        
+        // Anti-abuse: Check if referrer and referred player have same IP
+        if (hasSameIPReferral(referrerId, referredId)) {
+            plugin.getLogger().warning("Blocked referral attempt: Same IP detected for referrer " + referrerId + " and referred " + referredId);
             return false;
         }
         
@@ -266,13 +340,10 @@ public class ReferralDataManager {
     public void resetPlayerData(UUID playerId) {
         PlayerReferralData data = playerData.get(playerId);
         if (data != null) {
-            // Remove all referrals from referredBy map
-            for (UUID referred : data.getConfirmedReferrals()) {
-                referredBy.remove(referred);
-            }
-            for (UUID referred : data.getPendingReferrals().keySet()) {
-                referredBy.remove(referred);
-            }
+            // DON'T remove referral mappings from referredBy map
+            // The referred players should still show they were referred by this player
+            // Only clear the referrer's own referral lists and reset payout status
+            
             data.getConfirmedReferrals().clear();
             data.getPendingReferrals().clear();
             data.setClaimedPayout(false);
@@ -280,6 +351,30 @@ public class ReferralDataManager {
             // Save to database
             databaseManager.savePlayerData(data);
         }
+    }
+    
+    public boolean claimPayout(UUID playerId) {
+        PlayerReferralData data = playerData.get(playerId);
+        if (data != null && data.canClaimPayout(payoutThreshold)) {
+            // Store the referrals that will be removed for payout
+            List<UUID> referralsToRemove = new ArrayList<>();
+            List<UUID> referralsList = new ArrayList<>(data.getConfirmedReferrals());
+            
+            // Get the first N referrals to remove (where N = payoutThreshold)
+            for (int i = 0; i < payoutThreshold && i < referralsList.size(); i++) {
+                referralsToRemove.add(referralsList.get(i));
+            }
+            
+            // Remove the payout referrals from the player's data
+            if (data.removePayoutReferrals(payoutThreshold)) {
+                // Don't remove from referredBy map - players should still show who referred them
+                // Only set the payout as claimed and save
+                data.setClaimedPayout(true);
+                databaseManager.savePlayerData(data);
+                return true;
+            }
+        }
+        return false;
     }
     
     public long getRequiredPlaytimeTicks() {

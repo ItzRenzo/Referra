@@ -2,6 +2,7 @@ package me.itzrenzo.referra;
 
 import me.itzrenzo.referra.commands.ReferralCommand;
 import me.itzrenzo.referra.data.ReferralDataManager;
+import me.itzrenzo.referra.gui.ReferralCountGUI;
 import me.itzrenzo.referra.listeners.PlayerEventListener;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -10,14 +11,18 @@ public final class Referra extends JavaPlugin {
     private ReferralDataManager dataManager;
     private ReferralCommand referralCommand;
     private PlayerEventListener eventListener;
+    private ReferralCountGUI referralCountGUI;
 
     @Override
     public void onEnable() {
         // Initialize data manager
         dataManager = new ReferralDataManager(this);
         
+        // Initialize GUI system
+        referralCountGUI = new ReferralCountGUI(dataManager, this);
+        
         // Initialize command handler
-        referralCommand = new ReferralCommand(dataManager, this);
+        referralCommand = new ReferralCommand(dataManager, this, referralCountGUI);
         
         // Initialize event listener
         eventListener = new PlayerEventListener(dataManager, this);
@@ -46,5 +51,9 @@ public final class Referra extends JavaPlugin {
     
     public ReferralDataManager getDataManager() {
         return dataManager;
+    }
+    
+    public ReferralCountGUI getReferralCountGUI() {
+        return referralCountGUI;
     }
 }

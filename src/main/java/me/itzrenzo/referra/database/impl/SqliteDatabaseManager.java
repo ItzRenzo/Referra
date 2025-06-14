@@ -45,7 +45,8 @@ public class SqliteDatabaseManager implements DatabaseManager {
                 name TEXT NOT NULL,
                 referral_enabled BOOLEAN DEFAULT TRUE,
                 claimed_payout BOOLEAN DEFAULT FALSE,
-                first_join_time INTEGER
+                first_join_time INTEGER,
+                ip_address TEXT
             )
         """;
         
@@ -363,6 +364,60 @@ public class SqliteDatabaseManager implements DatabaseManager {
                 
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error saving first join time to SQLite: " + e.getMessage());
+                throw new RuntimeException(e);
+            }
+        });
+    }
+    
+    @Override
+    public CompletableFuture<Map<UUID, String>> loadPlayerIPs() {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<UUID, String> playerIPs = new HashMap<>();
+            
+            try {
+                String sql = "SELECT uuid, ip_address FROM players WHERE ip_address IS NOT NULL";
+                try (PreparedStatement stmt = connection.prepareStatement(sql);
+                     ResultSet rs = stmt.executeQuery()) {
+                    
+                    while (rs.next()) {
+                        UUID uuid = UUID.fromString(rs.getString("uuid"));
+                        String ipAddress = rs.getString("ip_address");
+                        playerIPs.put(uuid, ipAddress);
+                    }
+                }
+                
+            } catch (SQLException e) {
+                plugin.getLogger().severe("Error loading player IPs from SQLite: " + e.getMessage());
+                throw new RuntimeException(e);
+            }
+            
+            return playerIPs;
+        });
+    }
+    
+    @Override
+    public CompletableFuture<Void> savePlayerIP(UUID playerId, String ipAddress) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                String sql = "UPDATE players SET ip_address = ? WHERE uuid = ?";
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, ipAddress);
+                    stmt.setString(2, playerId.toString());
+                    
+                    int rowsAffected = stmt.executeUpdate();
+                    if (rowsAffected == 0) {
+                        // Player doesn't exist, insert them
+                        sql = "INSERT INTO players (uuid, name, ip_address) VALUES (?, 'Unknown', ?)";
+                        try (PreparedStatement insertStmt = connection.prepareStatement(sql)) {
+                            insertStmt.setString(1, playerId.toString());
+                            insertStmt.setString(2, ipAddress);
+                            insertStmt.executeUpdate();
+                        }
+                    }
+                }
+                
+            } catch (SQLException e) {
+                plugin.getLogger().severe("Error saving player IP to SQLite: " + e.getMessage());
                 throw new RuntimeException(e);
             }
         });

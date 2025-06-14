@@ -203,6 +203,31 @@ public class YmlDatabaseManager implements DatabaseManager {
     }
     
     @Override
+    public CompletableFuture<Map<UUID, String>> loadPlayerIPs() {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<UUID, String> playerIPs = new HashMap<>();
+            
+            if (dataConfig.contains("playerIPs")) {
+                for (String uuidString : dataConfig.getConfigurationSection("playerIPs").getKeys(false)) {
+                    UUID playerId = UUID.fromString(uuidString);
+                    String ipAddress = dataConfig.getString("playerIPs." + uuidString);
+                    playerIPs.put(playerId, ipAddress);
+                }
+            }
+            
+            return playerIPs;
+        });
+    }
+    
+    @Override
+    public CompletableFuture<Void> savePlayerIP(UUID playerId, String ipAddress) {
+        return CompletableFuture.runAsync(() -> {
+            dataConfig.set("playerIPs." + playerId.toString(), ipAddress);
+            saveConfigurationSync();
+        });
+    }
+    
+    @Override
     public String getDatabaseType() {
         return "YML";
     }

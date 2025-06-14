@@ -58,6 +58,16 @@ public interface DatabaseManager {
     CompletableFuture<Void> saveFirstJoinTime(UUID playerId, long timestamp);
     
     /**
+     * Load player IP addresses
+     */
+    CompletableFuture<Map<UUID, String>> loadPlayerIPs();
+    
+    /**
+     * Save player IP address
+     */
+    CompletableFuture<Void> savePlayerIP(UUID playerId, String ipAddress);
+    
+    /**
      * Get the database type
      */
     String getDatabaseType();

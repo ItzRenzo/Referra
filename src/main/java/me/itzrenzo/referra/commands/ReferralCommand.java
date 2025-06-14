@@ -2,6 +2,7 @@ package me.itzrenzo.referra.commands;
 
 import me.itzrenzo.referra.data.PlayerReferralData;
 import me.itzrenzo.referra.data.ReferralDataManager;
+import me.itzrenzo.referra.gui.ReferralCountGUI;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -20,11 +21,13 @@ import java.util.UUID;
 public class ReferralCommand implements CommandExecutor, TabCompleter {
     private final ReferralDataManager dataManager;
     private final JavaPlugin plugin;
+    private final ReferralCountGUI referralCountGUI;
     private static final int PLAYERS_PER_PAGE = 10;
     
-    public ReferralCommand(ReferralDataManager dataManager, JavaPlugin plugin) {
+    public ReferralCommand(ReferralDataManager dataManager, JavaPlugin plugin, ReferralCountGUI referralCountGUI) {
         this.dataManager = dataManager;
         this.plugin = plugin;
+        this.referralCountGUI = referralCountGUI;
     }
     
     @Override
@@ -160,7 +163,18 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
             // Save data
             dataManager.saveData();
         } else {
-            player.sendMessage(Component.text("Failed to add referral. You may already be referred by someone.").color(NamedTextColor.RED));
+            // Check if it was blocked due to IP abuse
+            if (dataManager.hasSameIPReferral(referrer.getUniqueId(), player.getUniqueId())) {
+                player.sendMessage(Component.text("Referral blocked: Anti-abuse protection detected suspicious activity.").color(NamedTextColor.RED));
+                // Notify admins about potential abuse attempt
+                for (Player admin : Bukkit.getOnlinePlayers()) {
+                    if (admin.hasPermission("referral.admin")) {
+                        admin.sendMessage(Component.text("[REFERRAL] Blocked same-IP referral attempt: " + player.getName() + " → " + referrer.getName()).color(NamedTextColor.YELLOW));
+                    }
+                }
+            } else {
+                player.sendMessage(Component.text("Failed to add referral. You may already be referred by someone.").color(NamedTextColor.RED));
+            }
         }
     }
     
@@ -175,34 +189,8 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
             }
         }
         
-        PlayerReferralData data = dataManager.getPlayerData(targetPlayer.getUniqueId(), targetPlayer.getName());
-        
-        if (targetPlayer.equals(player)) {
-            player.sendMessage(Component.text("=== Your Referral Stats ===").color(NamedTextColor.GOLD));
-            player.sendMessage(Component.text("Confirmed Referrals: ").color(NamedTextColor.GREEN)
-                    .append(Component.text(data.getReferralCount()).color(NamedTextColor.GOLD)));
-            
-            if (!dataManager.isPlaytimeRequirementDisabled()) {
-                long hours = dataManager.getRequiredPlaytimeHours();
-                String timeDesc = hours >= 24 ? (hours / 24) + " day" + (hours / 24 != 1 ? "s" : "") : hours + " hour" + (hours != 1 ? "s" : "");
-                player.sendMessage(Component.text("Pending Referrals: ").color(NamedTextColor.YELLOW)
-                        .append(Component.text(data.getPendingCount()).color(NamedTextColor.GOLD))
-                        .append(Component.text(" (waiting for " + timeDesc + " playtime)").color(NamedTextColor.GRAY)));
-            }
-        } else {
-            player.sendMessage(Component.text("=== " + targetPlayer.getName() + "'s Referral Stats ===").color(NamedTextColor.GOLD));
-            player.sendMessage(Component.text("Confirmed Referrals: ").color(NamedTextColor.GREEN)
-                    .append(Component.text(data.getReferralCount()).color(NamedTextColor.GOLD)));
-            if (!dataManager.isPlaytimeRequirementDisabled()) {
-                player.sendMessage(Component.text("Pending Referrals: ").color(NamedTextColor.YELLOW)
-                        .append(Component.text(data.getPendingCount()).color(NamedTextColor.GOLD)));
-            }
-        }
-        
-        int payoutThreshold = dataManager.getPayoutThreshold();
-        if (data.canClaimPayout(payoutThreshold)) {
-            player.sendMessage(Component.text("You're eligible for IRL payout! Use /referral claim").color(NamedTextColor.YELLOW));
-        }
+        // Open the GUI instead of showing text
+        referralCountGUI.openReferralCountGUI(player, targetPlayer);
     }
     
     private void handleTop(Player player, String[] args) {
@@ -261,26 +249,37 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
             return;
         }
         
-        data.setClaimedPayout(true);
-        dataManager.saveData();
+        // Get referral count before claiming (for Discord notification)
+        int referralCountBeforeClaim = data.getReferralCount();
         
-        // Send Discord notification for payout claimed
-        dataManager.getDiscordManager().sendPayoutClaimedNotification(player.getName(), data.getReferralCount());
-        
-        player.sendMessage(Component.text("Congratulations! You've claimed your IRL payout!").color(NamedTextColor.GREEN));
-        player.sendMessage(Component.text("Please contact an administrator to receive your reward.").color(NamedTextColor.YELLOW));
-        
-        // Show Discord instructions for claiming the reward
-        String discordInstructions = plugin.getConfig().getString("messages.discord-instructions", "&eJoin our Discord server and create a ticket to claim your reward: &b{invite}");
-        if (dataManager.getDiscordManager().isEnabled() && !dataManager.getDiscordManager().getServerInvite().isEmpty()) {
-            player.sendMessage(Component.text(discordInstructions.replace("&", "§").replace("{invite}", dataManager.getDiscordManager().getServerInvite())).color(NamedTextColor.AQUA));
-        }
-        
-        // Notify all online admins
-        for (Player admin : Bukkit.getOnlinePlayers()) {
-            if (admin.hasPermission("referral.admin")) {
-                admin.sendMessage(Component.text("[REFERRAL] " + player.getName() + " has claimed their IRL payout! (" + data.getReferralCount() + " referrals)").color(NamedTextColor.GOLD));
+        // Use the new claimPayout method that removes the threshold amount of referrals
+        if (dataManager.claimPayout(player.getUniqueId())) {
+            // Send Discord notification for payout claimed (using count before removal)
+            dataManager.getDiscordManager().sendPayoutClaimedNotification(player.getName(), referralCountBeforeClaim);
+            
+            int remainingReferrals = data.getReferralCount();
+            
+            player.sendMessage(Component.text("Congratulations! You've claimed your IRL payout!").color(NamedTextColor.GREEN));
+            player.sendMessage(Component.text("" + payoutThreshold + " referrals have been used for this payout.").color(NamedTextColor.YELLOW));
+            if (remainingReferrals > 0) {
+                player.sendMessage(Component.text("You have " + remainingReferrals + " referrals remaining.").color(NamedTextColor.AQUA));
             }
+            player.sendMessage(Component.text("Please contact an administrator to receive your reward.").color(NamedTextColor.YELLOW));
+            
+            // Show Discord instructions for claiming the reward
+            String discordInstructions = plugin.getConfig().getString("messages.discord-instructions", "&eJoin our Discord server and create a ticket to claim your reward: &b{invite}");
+            if (dataManager.getDiscordManager().isEnabled() && !dataManager.getDiscordManager().getServerInvite().isEmpty()) {
+                player.sendMessage(Component.text(discordInstructions.replace("&", "§").replace("{invite}", dataManager.getDiscordManager().getServerInvite())).color(NamedTextColor.AQUA));
+            }
+            
+            // Notify all online admins
+            for (Player admin : Bukkit.getOnlinePlayers()) {
+                if (admin.hasPermission("referral.admin")) {
+                    admin.sendMessage(Component.text("[REFERRAL] " + player.getName() + " has claimed their IRL payout! (" + referralCountBeforeClaim + " referrals used, " + remainingReferrals + " remaining)").color(NamedTextColor.GOLD));
+                }
+            }
+        } else {
+            player.sendMessage(Component.text("Failed to claim payout. Please try again later.").color(NamedTextColor.RED));
         }
     }
     
@@ -454,7 +453,7 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
         
         if (args.length == 1) {
-            List<String> subCommands = Arrays.asList("help", "create", "count", "top", "claim", "toggle");
+            List<String> subCommands = Arrays.asList("help", "create", "count", "top", "claim", "toggle", "referredby");
             if (sender.hasPermission("referral.admin")) {
                 subCommands = new ArrayList<>(subCommands);
                 subCommands.add("admin");
