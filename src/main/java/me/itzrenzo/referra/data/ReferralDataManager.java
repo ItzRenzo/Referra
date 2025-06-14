@@ -324,6 +324,7 @@ public class ReferralDataManager {
     
     public List<PlayerReferralData> getTopReferrers(int limit) {
         return playerData.values().stream()
+                .filter(data -> !data.getPlayerName().equalsIgnoreCase("unknown")) // Filter out "unknown" players (likely bots)
                 .sorted((a, b) -> Integer.compare(b.getReferralCount(), a.getReferralCount()))
                 .limit(limit)
                 .collect(Collectors.toList());
