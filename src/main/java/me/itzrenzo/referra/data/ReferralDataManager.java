@@ -4,6 +4,7 @@ import me.itzrenzo.referra.database.DatabaseManager;
 import me.itzrenzo.referra.database.impl.MysqlDatabaseManager;
 import me.itzrenzo.referra.database.impl.SqliteDatabaseManager;
 import me.itzrenzo.referra.database.impl.YmlDatabaseManager;
+import me.itzrenzo.referra.discord.DiscordWebhookManager;
 import org.bukkit.Statistic;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -26,6 +27,9 @@ public class ReferralDataManager {
     // Database manager
     private DatabaseManager databaseManager;
     
+    // Discord webhook manager
+    private DiscordWebhookManager discordManager;
+    
     public ReferralDataManager(JavaPlugin plugin) {
         this.plugin = plugin;
         this.playerData = new HashMap<>();
@@ -34,6 +38,9 @@ public class ReferralDataManager {
         
         // Load configuration
         loadConfiguration();
+        
+        // Initialize Discord webhook manager
+        this.discordManager = new DiscordWebhookManager(plugin);
         
         // Initialize database
         initializeDatabase();
@@ -95,6 +102,9 @@ public class ReferralDataManager {
     public void reloadConfiguration() {
         plugin.reloadConfig();
         loadConfiguration();
+        
+        // Reload Discord configuration
+        discordManager.loadConfiguration();
         
         // Reinitialize database if type changed
         String newDatabaseType = plugin.getConfig().getString("database.type", "YML").toUpperCase();
@@ -201,16 +211,38 @@ public class ReferralDataManager {
                     // Save to database
                     databaseManager.savePlayerData(referrerData);
                     
-                    // Notify the referrer if online
+                    // Get referrer info
                     Player referrer = plugin.getServer().getPlayer(referrerId);
+                    String referrerName = referrer != null ? referrer.getName() : referrerData.getPlayerName();
+                    
+                    // Check if referrer has reached payout threshold
+                    if (referrerData.getReferralCount() == payoutThreshold) {
+                        // Send Discord notification for threshold reached
+                        discordManager.sendThresholdReachedNotification(referrerName, referrerData.getReferralCount(), payoutThreshold);
+                        
+                        // Notify player about payout eligibility
+                        if (referrer != null && referrer.isOnline()) {
+                            String payoutMessage = plugin.getConfig().getString("messages.payout-eligible", "&a&lCongratulations! &r&aYou're now eligible for IRL payout!");
+                            referrer.sendMessage(payoutMessage.replace("&", "§"));
+                            
+                            String discordInstructions = plugin.getConfig().getString("messages.discord-instructions", "&eJoin our Discord server and create a ticket to claim your reward: &b{invite}");
+                            if (discordManager.isEnabled() && !discordManager.getServerInvite().isEmpty()) {
+                                referrer.sendMessage(discordInstructions.replace("&", "§").replace("{invite}", discordManager.getServerInvite()));
+                            }
+                        }
+                    }
+                    
+                    // Send Discord notification for referral confirmed (if enabled)
+                    discordManager.sendReferralConfirmedNotification(player.getName(), referrerName, referrerData.getReferralCount());
+                    
+                    // Notify the referrer if online
                     if (referrer != null && referrer.isOnline()) {
                         long hours = getRequiredPlaytimeHours();
                         String timeDesc = hours >= 24 ? (hours / 24) + " day" + (hours / 24 != 1 ? "s" : "") : hours + " hour" + (hours != 1 ? "s" : "");
                         referrer.sendMessage("§a[REFERRAL] " + player.getName() + " has now played for " + timeDesc + "! Referral confirmed. Total: " + referrerData.getReferralCount());
                     }
                     
-                    plugin.getLogger().info("Confirmed referral: " + player.getName() + " referred by " + 
-                            (referrer != null ? referrer.getName() : "Unknown"));
+                    plugin.getLogger().info("Confirmed referral: " + player.getName() + " referred by " + referrerName);
                 }
             }
         }
@@ -279,5 +311,9 @@ public class ReferralDataManager {
             saveData();
             databaseManager.close();
         }
+    }
+    
+    public DiscordWebhookManager getDiscordManager() {
+        return discordManager;
     }
 }

@@ -25,6 +25,36 @@ database:
     # Database file name (will be created in plugin folder)
     filename: referrals.db
 
+# Discord Integration
+discord:
+  # Enable Discord webhook notifications
+  enabled: true
+  
+  # Discord webhook URL for admin notifications
+  # Get this from your Discord server settings > Integrations > Webhooks
+  webhook-url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
+  
+  # Discord server invite link (shown to players when they're eligible for payout)
+  server-invite: "https://discord.gg/your-server-invite"
+  
+  # Webhook settings
+  webhook:
+    # Bot name that appears in Discord
+    username: "Referral System"
+    # Bot avatar URL (optional)
+    avatar-url: "https://i.imgur.com/your-avatar.png"
+    # Color for embed messages (in decimal format)
+    embed-color: 5814783  # Gold color
+  
+  # Notification settings
+  notifications:
+    # Notify when player reaches payout threshold
+    threshold-reached: true
+    # Notify when player claims payout
+    payout-claimed: true
+    # Notify when referrals are confirmed
+    referral-confirmed: false
+
 # Referral Settings
 referral:
   # Required playtime in hours before a referral is confirmed
@@ -45,3 +75,5 @@ messages:
   prefix: "&6[REFERRAL]&r "
   referral-confirmed: "&aReferral confirmed for {player}! Total referrals: {count}"
   playtime-requirement: "&eNote: Referrals are confirmed after {hours} hours of playtime."
+  payout-eligible: "&a&lCongratulations! &r&aYou're now eligible for IRL payout!"
+  discord-instructions: "&eJoin our Discord server and create a ticket to claim your reward: &b{invite}"

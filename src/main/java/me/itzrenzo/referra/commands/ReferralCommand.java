@@ -246,6 +246,14 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
             } else {
                 player.sendMessage(Component.text("You need at least " + payoutThreshold + " referrals to claim IRL payout!").color(NamedTextColor.RED));
                 player.sendMessage(Component.text("Current referrals: " + data.getReferralCount()).color(NamedTextColor.YELLOW));
+                
+                // Show Discord instructions if they're close to the threshold (within 10 referrals)
+                if (data.getReferralCount() >= payoutThreshold - 10) {
+                    String discordInstructions = plugin.getConfig().getString("messages.discord-instructions", "&eJoin our Discord server and create a ticket to claim your reward: &b{invite}");
+                    if (dataManager.getDiscordManager().isEnabled() && !dataManager.getDiscordManager().getServerInvite().isEmpty()) {
+                        player.sendMessage(Component.text("Info: " + discordInstructions.replace("&", "§").replace("{invite}", dataManager.getDiscordManager().getServerInvite())).color(NamedTextColor.GRAY));
+                    }
+                }
             }
             return;
         }
@@ -253,8 +261,17 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
         data.setClaimedPayout(true);
         dataManager.saveData();
         
+        // Send Discord notification for payout claimed
+        dataManager.getDiscordManager().sendPayoutClaimedNotification(player.getName(), data.getReferralCount());
+        
         player.sendMessage(Component.text("Congratulations! You've claimed your IRL payout!").color(NamedTextColor.GREEN));
         player.sendMessage(Component.text("Please contact an administrator to receive your reward.").color(NamedTextColor.YELLOW));
+        
+        // Show Discord instructions for claiming the reward
+        String discordInstructions = plugin.getConfig().getString("messages.discord-instructions", "&eJoin our Discord server and create a ticket to claim your reward: &b{invite}");
+        if (dataManager.getDiscordManager().isEnabled() && !dataManager.getDiscordManager().getServerInvite().isEmpty()) {
+            player.sendMessage(Component.text(discordInstructions.replace("&", "§").replace("{invite}", dataManager.getDiscordManager().getServerInvite())).color(NamedTextColor.AQUA));
+        }
         
         // Notify all online admins
         for (Player admin : Bukkit.getOnlinePlayers()) {
