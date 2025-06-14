@@ -1,0 +1,26 @@
+name: Referra
+version: '1.0'
+main: me.itzrenzo.referra.Referra
+api-version: '1.21'
+load: STARTUP
+authors: [ ItzRenzo ]
+description: A referral system plugin for Minecraft servers
+
+commands:
+  referral:
+    description: Main referral command
+    usage: /referral <help|refer|count|top|claim|toggle|admin>
+    aliases: [referra]
+    permission: referral.use
+  referra:
+    description: Alias for referral command
+    usage: /referra <help|refer|count|top|claim|toggle|admin>
+    permission: referral.use
+
+permissions:
+  referral.use:
+    description: Allows players to use referral commands
+    default: true
+  referral.admin:
+    description: Allows access to admin referral commands
+    default: op

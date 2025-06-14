@@ -1,0 +1,47 @@
+# Referra Plugin Configuration
+# Configuration file for the referral system
+
+# Database Configuration
+database:
+  # Database type: YML, SQLITE, or MYSQL
+  # YML - Stores data in YAML files (default, no setup required)
+  # SQLITE - Stores data in SQLite database file (lightweight, no server required)
+  # MYSQL - Stores data in MySQL database (requires MySQL server)
+  type: YML
+  
+  # MySQL Configuration (only used if type is MYSQL)
+  mysql:
+    host: localhost
+    port: 3306
+    database: referral_system
+    username: root
+    password: password
+    # Connection pool settings
+    max-pool-size: 10
+    connection-timeout: 30000
+  
+  # SQLite Configuration (only used if type is SQLITE)
+  sqlite:
+    # Database file name (will be created in plugin folder)
+    filename: referrals.db
+
+# Referral Settings
+referral:
+  # Required playtime in hours before a referral is confirmed
+  # Default: 168 hours (7 days)
+  # Set to 0 to disable the playtime requirement
+  required-playtime-hours: 168
+  
+  # How often to check for referral confirmations (in minutes)
+  # Default: 5 minutes
+  check-interval-minutes: 5
+  
+  # Minimum referrals required to claim IRL payout
+  # Default: 100
+  payout-threshold: 100
+
+# Plugin Messages (customize these if you want)
+messages:
+  prefix: "&6[REFERRAL]&r "
+  referral-confirmed: "&aReferral confirmed for {player}! Total referrals: {count}"
+  playtime-requirement: "&eNote: Referrals are confirmed after {hours} hours of playtime."
