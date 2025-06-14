@@ -50,6 +50,9 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
             case "create":
                 handleCreate(player);
                 break;
+            case "referredby":
+                handleReferredBy(player, args);
+                break;
             case "count":
                 handleCount(player, args);
                 break;
@@ -66,8 +69,7 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
                 handleAdmin(player, args);
                 break;
             default:
-                // If it's not a recognized subcommand, treat it as a referrer name
-                handleReferredBy(player, args[0]);
+                player.sendMessage(Component.text("Unknown command! Use /referral help for available commands.").color(NamedTextColor.RED));
                 break;
         }
         
@@ -79,6 +81,8 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(Component.text("=== Referral System Help ===").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text("/referral create").color(NamedTextColor.YELLOW)
                 .append(Component.text(" - Create your referral status").color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("/referral referredby <player>").color(NamedTextColor.YELLOW)
+                .append(Component.text(" - Set who referred you").color(NamedTextColor.WHITE)));
         player.sendMessage(Component.text("/referral count [player]").color(NamedTextColor.YELLOW)
                 .append(Component.text(" - Show referral count").color(NamedTextColor.WHITE)));
         player.sendMessage(Component.text("/referral top [page]").color(NamedTextColor.YELLOW)
@@ -114,7 +118,13 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(Component.text("Share your player name with new players to get referrals!").color(NamedTextColor.YELLOW));
     }
     
-    private void handleReferredBy(Player player, String referrerName) {
+    private void handleReferredBy(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(Component.text("Usage: /referral referredby <player>").color(NamedTextColor.RED));
+            return;
+        }
+        
+        String referrerName = args[1];
         Player referrer = Bukkit.getPlayer(referrerName);
         
         if (referrer == null) {
