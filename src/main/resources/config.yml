@@ -27,7 +27,7 @@ database:
 # Discord Integration
 discord:
   # Enable Discord webhook notifications
-  enabled: true
+  enabled: false
   
   # Discord webhook URL for admin notifications
   # Get this from your Discord server settings > Integrations > Webhooks

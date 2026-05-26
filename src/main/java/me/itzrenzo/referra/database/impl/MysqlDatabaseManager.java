@@ -39,8 +39,11 @@ public class MysqlDatabaseManager implements DatabaseManager {
     public CompletableFuture<Void> initialize() {
         return CompletableFuture.runAsync(() -> {
             try {
+                Class.forName("com.mysql.cj.jdbc.Driver");
+
                 HikariConfig config = new HikariConfig();
                 config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + "?useSSL=false&allowPublicKeyRetrieval=true");
+                config.setDriverClassName("com.mysql.cj.jdbc.Driver");
                 config.setUsername(username);
                 config.setPassword(password);
                 config.setMaximumPoolSize(maxPoolSize);
@@ -54,7 +57,7 @@ public class MysqlDatabaseManager implements DatabaseManager {
                 
                 createTables();
                 plugin.getLogger().info("MySQL database initialized successfully: " + host + ":" + port + "/" + database);
-            } catch (SQLException e) {
+            } catch (ClassNotFoundException | SQLException e) {
                 plugin.getLogger().severe("Failed to initialize MySQL database: " + e.getMessage());
                 throw new RuntimeException(e);
             }

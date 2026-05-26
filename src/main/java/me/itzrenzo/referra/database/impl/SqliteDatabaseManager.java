@@ -23,6 +23,8 @@ public class SqliteDatabaseManager implements DatabaseManager {
     public CompletableFuture<Void> initialize() {
         return CompletableFuture.runAsync(() -> {
             try {
+                Class.forName("org.sqlite.JDBC");
+
                 File dbFile = new File(plugin.getDataFolder(), filename);
                 plugin.getDataFolder().mkdirs();
                 
@@ -31,7 +33,7 @@ public class SqliteDatabaseManager implements DatabaseManager {
                 
                 createTables();
                 plugin.getLogger().info("SQLite database initialized successfully: " + filename);
-            } catch (SQLException e) {
+            } catch (ClassNotFoundException | SQLException e) {
                 plugin.getLogger().severe("Failed to initialize SQLite database: " + e.getMessage());
                 throw new RuntimeException(e);
             }
