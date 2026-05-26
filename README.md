@@ -1,107 +1,92 @@
-# 🎯 Referra - Advanced Minecraft Referral System
+# Referra
 
-[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21+-green.svg)](https://www.minecraft.net/)
-[![Paper](https://img.shields.io/badge/Paper-API-blue.svg)](https://papermc.io/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+Referra is a Paper plugin for handling player referrals on a Minecraft server.
 
-A comprehensive referral system plugin for Minecraft servers that rewards players for bringing new members to your community. Features advanced anti-abuse protection, configurable database storage, Discord webhook integration, and flexible reward systems.
+In its current setup:
+- A player must use `/referral create` before they can receive referrals.
+- A player needs enough playtime before they can use `/referral create`.
+- Each player can refer only one other player.
+- The referred player can receive an immediate reward.
+- The referrer can claim their own reward later with `/referral claim` once the referral is confirmed.
+- SQLite is the default storage backend.
 
-## ✨ Features
+## Requirements
 
-### 🔒 **Advanced Anti-Abuse Protection**
-- **IP Address Tracking**: Automatically records and tracks player IP addresses to prevent multi-account abuse
-- **Same-IP Detection**: Blocks referral attempts from players using the same IP address
-- **Playtime Verification**: Referrals only count after the referred player has played for a configurable amount of time (default: 7 days)
-- **Pending System**: New referrals start as "pending" until playtime requirement is met
-- **Duplicate Prevention**: Players can only be referred once
-- **Self-Referral Protection**: Players cannot refer themselves
-- **Real-Time Admin Alerts**: Admins receive instant notifications about blocked abuse attempts
+- Java 21
+- Paper 1.21 or newer
 
-### 💰 **Reward System**
-- **Single Referral Slot**: Each player can refer only one other player
-- **Dual Rewards**: Both the referrer and the referred player can receive configurable rewards
-- **Claim Flow for Referrers**: Referrers are notified when their reward is ready and can use `/referral claim`
-- **Config-Driven Commands**: Rewards are fully editable through `config.yml`
+## Installation
 
-### 🗄️ **Flexible Database Support**
-- **SQLite**: Lightweight database file (perfect for medium servers)
-- **MySQL**: Enterprise-grade database with connection pooling (ideal for large networks)
-- **Synchronous Loading**: Fixed database loading issues on server restart
-- **IP Storage**: All database types support IP address tracking for anti-abuse
+1. Build or download `Referra.jar`.
+2. Place it in your server's `plugins` folder.
+3. Start the server once to generate `plugins/Referra/config.yml`.
+4. Adjust the configuration to fit your server.
+5. Run `/referral admin reload` after making config changes.
 
-### 🔔 **Discord Integration**
-- **Automated Notifications**: Webhook alerts for admin team when players reach payout thresholds
-- **Rich Embeds**: Professional Discord messages with player info, referral counts, and timestamps
-- **Payout Management**: Automatic notifications when players claim IRL rewards
-- **Player Guidance**: Automatic Discord server invites and ticket creation instructions
-- **Configurable Alerts**: Choose which events trigger Discord notifications
-- **Abuse Monitoring**: Notifications when suspicious activity is detected
+## Commands
 
-### 🖥️ **Player Commands**
-- `/referral create` - Create your referral status (required to receive referrals)
-- `/referral <player>` - Set who referred you to the server
-- `/referral claim` - Claim your referrer reward after the referral is confirmed
-- `/referral top [page]` - Browse the referral leaderboard
-- `/referral toggle [on|off]` - Enable/disable your referral system
-- `/referral help` - Display help information
+### Player commands
 
-### 🛠️ **Admin Commands**
-- `/referral admin stats <player>` - View detailed player statistics including IP info
-- `/referral admin reset <player>` - Reset a player's referral data (preserves referral relationships)
-- `/referral admin reload` - Reload configuration without restart
+- `/referral create`
+  Enables your referral status after you meet the required playtime.
+- `/referral <player>`
+  Marks `<player>` as the person who referred you.
+- `/referral claim`
+  Claims the referrer's reward once it becomes available.
+- `/referral top [page]`
+  Shows the referral leaderboard.
+- `/referral toggle [on|off]`
+  Turns your referral status on or off.
+- `/referral help`
+  Shows command help.
 
-### ⚙️ **Highly Configurable**
-- **Playtime Requirements**: Set custom hours/days required for confirmation
-- **Payout Thresholds**: Configure how many referrals needed for rewards
-- **Check Intervals**: Adjust how often the system validates referrals
-- **Database Settings**: Switch between storage types easily
-- **Discord Settings**: Customize webhook behavior and notifications
+### Admin commands
 
-## 🚀 Installation
+- `/referral admin stats <player>`
+  Shows referral-related information for a player.
+- `/referral admin reset <player>`
+  Clears a player's referral progress and reward state.
+- `/referral admin reload`
+  Reloads the plugin configuration.
 
-1. **Download** the latest `Referra.jar` from the [releases page](../../releases)
-2. **Place** the jar file in your server's `plugins` folder
-3. **Restart** your server
-4. **Configure** the plugin by editing `plugins/Referra/config.yml`
-5. **Set up Discord webhooks** (optional but recommended)
-6. **Update database** (if upgrading from older version - see Database Migration section)
-7. **Reload** the configuration with `/referral admin reload`
+## How it works
 
-### 📋 Requirements
-- **Minecraft**: 1.21 or higher
-- **Server Software**: Paper, Purpur, or other Paper-based servers
-- **Java**: 21 or higher
-- **Database** (optional): MySQL 8.0+ or SQLite support
-- **Discord Server** (optional): For webhook notifications
+1. A player joins and plays until they meet the create requirement.
+2. They run `/referral create`.
+3. A new player joins and runs `/referral <referrer-name>`.
+4. The referred player gets the configured reward immediately, if one is configured.
+5. The referral stays pending until the referred player meets the confirmation playtime requirement.
+6. Once confirmed, the referrer is notified that their reward is ready.
+7. The referrer runs `/referral claim` to receive it.
 
-## 🔄 Database Migration
+## Current referral rules
 
-If you're upgrading from an older version, you may need to add the IP address column:
+- A player can only refer one person.
+- A player can only be referred once.
+- Self-referrals are blocked.
+- Same-IP referrals are blocked.
+- If the referrer has not enabled referrals, the referral will be rejected.
 
-### MySQL Migration:
-```sql
-ALTER TABLE players ADD COLUMN ip_address VARCHAR(45) AFTER first_join_time;
-CREATE INDEX idx_ip_address ON players(ip_address);
-```
+## Configuration
 
-### SQLite Migration:
-```sql
-ALTER TABLE players ADD COLUMN ip_address TEXT;
-```
+The plugin reads from `plugins/Referra/config.yml`.
 
-**Note**: The plugin will work without migration, but IP-based anti-abuse protection won't be available until the column is added.
+### Database
 
-## ⚙️ Configuration
-
-### Basic Configuration (`config.yml`)
+SQLite is the default:
 
 ```yaml
-# Database Configuration
 database:
-  type: SQLITE  # Options: SQLITE, MYSQL
-  
-  # MySQL Settings (only if type is MYSQL)
+  type: SQLITE
+  sqlite:
+    filename: referrals.db
+```
+
+MySQL is also supported:
+
+```yaml
+database:
+  type: MYSQL
   mysql:
     host: localhost
     port: 3306
@@ -110,327 +95,95 @@ database:
     password: password
     max-pool-size: 10
     connection-timeout: 30000
-  
-  # SQLite Settings (only if type is SQLITE)
-  sqlite:
-    filename: referrals.db
+```
 
-# Discord Integration
-discord:
-  # Enable Discord webhook notifications
-  enabled: true
-  
-  # Discord webhook URL for admin notifications
-  # Get this from your Discord server settings > Integrations > Webhooks
-  webhook-url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
-  
-  # Discord server invite link (shown to players when they're eligible for payout)
-  server-invite: "https://discord.gg/your-server-invite"
-  
-  # Webhook settings
-  webhook:
-    # Bot name that appears in Discord
-    username: "Referral System"
-    # Bot avatar URL (optional)
-    avatar-url: "https://i.imgur.com/your-avatar.png"
-    # Color for embed messages (in decimal format)
-    embed-color: 5814783  # Gold color
-  
-  # Notification settings
-  notifications:
-    # Notify when player reaches payout threshold
-    threshold-reached: true
-    # Notify when referrals are confirmed
-    referral-confirmed: false
+### Referral settings
 
-# Referral Settings
+```yaml
 referral:
-  # Required playtime in hours before referral confirmation
-  # Set to 0 to disable playtime requirement
-  required-playtime-hours: 168  # 7 days
-  
-  # How often to check for confirmations (in minutes)
+  required-playtime-hours: 2
+  create-required-playtime-hours: 2
   check-interval-minutes: 5
-  
-  # Each player can refer only one person
   max-referrals-per-player: 1
-
-  # Referrers can claim their reward after one confirmed referral
   payout-threshold: 1
+```
 
+Meaning:
+
+- `required-playtime-hours`
+  How long the referred player must play before the referral is confirmed.
+- `create-required-playtime-hours`
+  How long a player must play before they can use `/referral create`.
+- `check-interval-minutes`
+  How often the plugin checks pending referrals.
+- `max-referrals-per-player`
+  How many players one person is allowed to refer.
+- `payout-threshold`
+  How many confirmed referrals are required before the referrer can claim their reward.
+
+With the current defaults, both the create requirement and the confirmation requirement are set to 2 hours, and each player gets one referral slot.
+
+### Reward commands
+
+Rewards are configured as console commands.
+
+Available placeholders:
+
+- `{player}`: the player receiving the reward
+- `{referrer}`: the player who referred them
+
+Example:
+
+```yaml
 rewards:
   referrer:
     commands:
-      - "give {player} diamond 1"
+      - "shardmanager add {player} 100"
   referred:
     commands:
-      - "give {player} iron_ingot 3"
+      - "shardmanager add {player} 50"
 ```
 
-### 🔔 Discord Webhook Setup
+`referred.commands` are executed when the referral is accepted.
 
-#### Step 1: Create a Discord Webhook
-1. Go to your Discord server
-2. Navigate to **Server Settings** → **Integrations** → **Webhooks**
-3. Click **New Webhook**
-4. Choose the channel for notifications
-5. Copy the **Webhook URL**
+`referrer.commands` are executed when the referrer runs `/referral claim`.
 
-#### Step 2: Configure the Plugin
+### Messages
+
+You can adjust the built-in messages in `config.yml`:
+
+```yaml
+messages:
+  referral-confirmed: "&aReferral confirmed for {player}! Total referrals: {count}"
+  payout-eligible: "&a&lCongratulations! &r&aYour referral has been confirmed."
+  reward-ready: "&aYour referrer reward is ready. Run &e/referral claim &ato receive it."
+  discord-instructions: "&eJoin our Discord server and create a ticket to claim your reward: &b{invite}"
+```
+
+## Discord webhook support
+
+The plugin can send webhook messages for reward threshold events and referral confirmations.
+
+Basic setup:
+
 ```yaml
 discord:
   enabled: true
-  webhook-url: "https://discord.com/api/webhooks/1234567890/your-webhook-token-here"
+  webhook-url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
   server-invite: "https://discord.gg/your-server-invite"
+  notifications:
+    threshold-reached: true
+    referral-confirmed: false
 ```
 
-#### Step 3: Test the Integration
-- Have a player reach the payout threshold
-- Check your Discord channel for webhook messages
+If webhook support is enabled and a server invite is configured, the plugin can also include Discord instructions in player-facing messages.
 
-### Database Setup Examples
+## Notes for existing installs
 
-#### SQLite (Default)
-```yaml
-database:
-  type: SQLITE
-  sqlite:
-    filename: referrals.db
-```
+- SQLite is now the default storage backend.
+- The old YML storage path is no longer used.
+- If you changed reward or referral logic from earlier versions, review `config.yml` after updating.
 
-#### MySQL (Enterprise/Networks)
-```yaml
-database:
-  type: MYSQL
-  mysql:
-    host: your-database-host.com
-    port: 3306
-    database: minecraft_referrals
-    username: minecraft_user
-    password: secure_password123
-    max-pool-size: 20
-    connection-timeout: 30000
-```
+## License
 
-## 🎯 Usage Examples
-
-### For Players
-```
-/referral create                # Initialize your referral status
-/referral Steve                  # Set Steve as your referrer
-/referral claim                  # Claim your reward after your referral confirms
-/referral top                    # View leaderboard
-/referral toggle off             # Temporarily disable your referrals
-```
-
-### For Admins
-```
-/referral admin stats Steve     # View Steve's detailed stats (including IP info)
-/referral admin reset Steve     # Reset Steve's referral data
-/referral admin reload          # Reload configuration
-```
-
-## 🔔 Discord Notifications
-
-The plugin sends rich Discord embeds for important events:
-
-### 🎯 **Player Reaches Threshold**
-- Triggered when a player reaches the reward threshold
-- Includes player name, referral count, and eligibility status
-- Lets the referrer know they can run `/referral claim`
-
-### 🚨 **Anti-Abuse Alerts**
-- Triggered when same-IP referral attempts are blocked
-- Helps admins monitor for suspicious activity
-- Includes player names and detection details
-
-### ✅ **Referral Confirmed** (Optional)
-- Triggered when pending referrals are confirmed
-- Includes referred player, referrer, and new total
-- Disabled by default to reduce spam
-
-## 🛡️ **Anti-Abuse System**
-
-### How It Works:
-1. **IP Recording**: Every player's IP is automatically recorded on join
-2. **Same-IP Detection**: System checks if referrer and referred player share an IP
-3. **Automatic Blocking**: Suspicious referrals are blocked instantly
-4. **Admin Notifications**: Real-time alerts about blocked attempts
-5. **Logging**: All abuse attempts are logged for investigation
-
-### Player Experience:
-```
-❌ "Referral blocked: Anti-abuse protection detected suspicious activity."
-```
-
-### Admin Experience:
-```
-🚨 "[REFERRAL] Blocked same-IP referral attempt: NewPlayer → ExistingPlayer"
-```
-
-## 💰 **Smart Payout System**
-
-### Multiple Payouts:
-- Players can claim rewards multiple times
-- Only the threshold amount (e.g., 100) is consumed per claim
-- Remaining referrals are kept for future payouts
-
-### Example:
-```
-Player has 250 referrals → Claims payout → 100 consumed, 150 remain
-Player gets 50 more referrals (200 total) → Can claim again
-```
-
-### Player Feedback:
-```
-✅ "Congratulations! You've claimed your IRL payout!"
-📝 "100 referrals have been used for this payout."
-🎯 "You have 150 referrals remaining."
-```
-
-## 🔧 Customization Options
-
-### Playtime Requirements
-- **1 Day**: `required-playtime-hours: 24`
-- **3 Days**: `required-playtime-hours: 72`
-- **1 Week**: `required-playtime-hours: 168` (default)
-- **2 Weeks**: `required-playtime-hours: 336`
-- **Disabled**: `required-playtime-hours: 0`
-
-### Payout Thresholds
-- **Small Server**: `payout-threshold: 25`
-- **Medium Server**: `payout-threshold: 100` (default)
-- **Large Server**: `payout-threshold: 500`
-
-### Discord Notification Colors
-- **Gold**: `embed-color: 5814783` (default)
-- **Green**: `embed-color: 65280`
-- **Blue**: `embed-color: 255`
-- **Red**: `embed-color: 16711680`
-- **Purple**: `embed-color: 8388736`
-
-## 📊 How It Works
-
-1. **Player A creates referral status** using `/referral create`
-2. **Player B joins the server** and uses `/referral PlayerA`
-3. **IP Check**: System verifies A and B don't share the same IP address
-4. **Referral starts as "pending"** until playtime requirement is met
-5. **System tracks Player B's playtime** using Minecraft's built-in statistics
-6. **After required hours played**, referral automatically becomes "confirmed"
-7. **Player A gets notified** when their referral is confirmed
-8. **At 100+ referrals**, Discord webhook alerts admins automatically
-9. **Once the referral is confirmed**, Player A is told to run `/referral claim`
-
-## 🛡️ Permissions
-
-```yaml
-referral.use: true          # Allow basic referral commands (default: true)
-referral.admin: false       # Allow admin commands (default: op only)
-```
-
-## 🔧 Developer API
-
-The plugin provides a clean API for integration with other plugins:
-
-```java
-// Get the data manager
-ReferralDataManager dataManager = Referra.getInstance().getDataManager();
-
-// Check if player has referred someone
-boolean hasReferred = dataManager.getPlayerData(playerId, playerName).getReferralCount() > 0;
-
-// Get referral count
-int referrals = dataManager.getPlayerData(playerId, playerName).getReferralCount();
-
-// Check for IP abuse
-boolean sameIP = dataManager.hasSameIPReferral(referrerId, referredId);
-
-// Access Discord webhook manager
-DiscordWebhookManager discordManager = dataManager.getDiscordManager();
-```
-
-## 🚀 Admin Workflow
-
-### Setting Up Payouts
-1. **Configure Discord webhook** in your admin channel
-2. **Set payout threshold** in config.yml
-3. **Create Discord ticket system** for reward processing
-4. **Train staff** on payout verification process
-5. **Monitor anti-abuse alerts** for suspicious activity
-
-### Managing Payouts
-1. **Player reaches threshold** → Automatic Discord notification
-2. **Player claims reward** → Discord notification with consumption details
-3. **Admin verifies eligibility** through Discord ticket system
-4. **Process IRL reward** (PayPal, gift cards, etc.)
-5. **Player can continue earning** for additional payouts
-
-### Monitoring Anti-Abuse
-1. **Real-time alerts** about blocked attempts
-2. **Admin stats command** shows IP information
-3. **Server logs** record all suspicious activity
-4. **Manual investigation** of flagged players
-
-## 🔍 Troubleshooting
-
-### Common Issues:
-
-**Referrals not showing after restart:**
-- Ensure database is properly configured
-- Check for synchronous loading logs on startup
-- Verify database connection settings
-
-**IP anti-abuse not working:**
-- Run database migration commands
-- Check if `ip_address` column exists in database
-- Restart server after migration
-
-**Discord notifications not sending:**
-- Verify webhook URL is correct
-- Check Discord channel permissions
-- Test webhook with online tools
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🐛 Bug Reports & Feature Requests
-
-Please use the [GitHub Issues](../../issues) page to:
-- Report bugs
-- Request new features
-- Ask questions
-- Get support
-
-## 📈 Statistics
-
-- **Advanced Anti-Abuse**: Prevents multi-account abuse through IP tracking and playtime verification
-- **Smart Payouts**: Multiple reward claims with partial referral consumption
-- **Performance**: Synchronous database loading ensures data availability on restart
-- **Scalability**: Supports from small servers to large networks with enterprise databases
-- **Reliability**: Transaction-based operations with rollback support
-- **Discord Integration**: Professional webhook notifications for seamless admin workflow
-
-## 🎖️ Credits
-
-**Author**: ItzRenzo  
-**Contributors**: [View all contributors](../../contributors)
-
----
-
-**⭐ If you find this plugin useful, please consider giving it a star!**
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](../../issues)
-- **Wiki**: [Plugin Documentation](../../wiki)
+This project is released under the MIT License. See [LICENSE](LICENSE).
