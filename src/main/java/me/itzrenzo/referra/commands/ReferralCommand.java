@@ -22,7 +22,7 @@ import java.util.UUID;
 
 public class ReferralCommand implements CommandExecutor, TabCompleter {
     private static final int PLAYERS_PER_PAGE = 10;
-    private static final Set<String> SUB_COMMANDS = Set.of("help", "create", "claim", "top", "toggle", "admin");
+    private static final Set<String> SUB_COMMANDS = Set.of("help", "create", "claim", "top", "admin");
 
     private final ReferralDataManager dataManager;
     private final JavaPlugin plugin;
@@ -50,7 +50,6 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
             case "create" -> handleCreate(player);
             case "claim" -> handleClaim(player);
             case "top" -> handleTop(player, args);
-            case "toggle" -> handleToggle(player, args);
             case "admin" -> handleAdmin(player, args);
             default -> handleReferralTarget(player, args[0], args.length);
         }
@@ -70,8 +69,6 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
                 .append(Component.text(" - Claim your referrer reward").color(NamedTextColor.WHITE)));
         player.sendMessage(Component.text("/referral top [page]").color(NamedTextColor.YELLOW)
                 .append(Component.text(" - View top referrers").color(NamedTextColor.WHITE)));
-        player.sendMessage(Component.text("/referral toggle [on|off]").color(NamedTextColor.YELLOW)
-                .append(Component.text(" - Toggle referral system").color(NamedTextColor.WHITE)));
         player.sendMessage(Component.text("Max referrals per player: " + dataManager.getMaxReferralsPerPlayer()).color(NamedTextColor.GRAY));
         player.sendMessage(Component.text("Create requirement: " + dataManager.getCreateRequiredPlaytimeHours() + " hours played").color(NamedTextColor.GRAY));
         player.sendMessage(Component.text("Referral reward threshold: " + payoutThreshold).color(NamedTextColor.GRAY));
@@ -223,33 +220,6 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void handleToggle(Player player, String[] args) {
-        PlayerReferralData data = dataManager.getPlayerData(player.getUniqueId(), player.getName());
-        boolean newState;
-
-        if (args.length > 1) {
-            String state = args[1].toLowerCase(Locale.ROOT);
-            if (state.equals("on") || state.equals("true")) {
-                newState = true;
-            } else if (state.equals("off") || state.equals("false")) {
-                newState = false;
-            } else {
-                player.sendMessage(Component.text("Usage: /referral toggle [on|off]").color(NamedTextColor.RED));
-                return;
-            }
-        } else {
-            newState = !data.isReferralEnabled();
-        }
-
-        data.setReferralEnabled(newState);
-        dataManager.saveData();
-
-        player.sendMessage(Component.text(newState
-                        ? "Your referral system has been enabled!"
-                        : "Your referral system has been disabled!")
-                .color(newState ? NamedTextColor.GREEN : NamedTextColor.RED));
-    }
-
     private void handleAdmin(Player player, String[] args) {
         if (!player.hasPermission("referral.admin")) {
             player.sendMessage(Component.text("You don't have permission to use admin commands!").color(NamedTextColor.RED));
@@ -393,14 +363,7 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
                 }
             }
         } else if (args.length == 2) {
-            if (args[0].equalsIgnoreCase("toggle")) {
-                if ("on".startsWith(args[1].toLowerCase(Locale.ROOT))) {
-                    completions.add("on");
-                }
-                if ("off".startsWith(args[1].toLowerCase(Locale.ROOT))) {
-                    completions.add("off");
-                }
-            } else if (args[0].equalsIgnoreCase("admin") && sender.hasPermission("referral.admin")) {
+            if (args[0].equalsIgnoreCase("admin") && sender.hasPermission("referral.admin")) {
                 for (String option : List.of("stats", "reset", "reload")) {
                     if (option.startsWith(args[1].toLowerCase(Locale.ROOT))) {
                         completions.add(option);

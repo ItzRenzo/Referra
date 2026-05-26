@@ -35,8 +35,6 @@ In its current setup:
   Claims the referrer's reward once it becomes available.
 - `/referral top [page]`
   Shows the referral leaderboard.
-- `/referral toggle [on|off]`
-  Turns your referral status on or off.
 - `/referral help`
   Shows command help.
 

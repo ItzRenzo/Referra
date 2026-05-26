@@ -13,7 +13,7 @@ libraries:
 commands:
   referral:
     description: Main referral command
-    usage: /referral [help|create|claim|top|toggle|admin|<referrer-ign>]
+    usage: /referral [help|create|claim|top|admin|<referrer-ign>]
     aliases: [referra]
     permission: referral.use
 
