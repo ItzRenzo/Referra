@@ -9,12 +9,8 @@ description: A referral system plugin for Minecraft servers
 commands:
   referral:
     description: Main referral command
-    usage: /referral <help|refer|count|top|claim|toggle|admin>
+    usage: /referral [help|create|claim|top|toggle|admin|<referrer-ign>]
     aliases: [referra]
-    permission: referral.use
-  referra:
-    description: Alias for referral command
-    usage: /referra <help|refer|count|top|claim|toggle|admin>
     permission: referral.use
 
 permissions:

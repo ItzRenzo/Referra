@@ -43,7 +43,7 @@ public class SqliteDatabaseManager implements DatabaseManager {
             CREATE TABLE IF NOT EXISTS players (
                 uuid TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                referral_enabled BOOLEAN DEFAULT TRUE,
+                referral_enabled BOOLEAN DEFAULT FALSE,
                 claimed_payout BOOLEAN DEFAULT FALSE,
                 first_join_time INTEGER,
                 ip_address TEXT
@@ -73,6 +73,11 @@ public class SqliteDatabaseManager implements DatabaseManager {
             stmt.execute(createPlayersTable);
             stmt.execute(createConfirmedReferralsTable);
             stmt.execute(createPendingReferralsTable);
+            stmt.execute("ALTER TABLE players ADD COLUMN claimed_payout BOOLEAN DEFAULT FALSE");
+        } catch (SQLException e) {
+            if (!e.getMessage().toLowerCase(Locale.ROOT).contains("duplicate column")) {
+                throw e;
+            }
         }
     }
     
@@ -102,11 +107,11 @@ public class SqliteDatabaseManager implements DatabaseManager {
                         UUID uuid = UUID.fromString(rs.getString("uuid"));
                         String name = rs.getString("name");
                         boolean enabled = rs.getBoolean("referral_enabled");
-                        boolean claimed = rs.getBoolean("claimed_payout");
+                        boolean claimedReward = rs.getBoolean("claimed_payout");
                         
                         PlayerReferralData data = new PlayerReferralData(uuid, name);
                         data.setReferralEnabled(enabled);
-                        data.setClaimedPayout(claimed);
+                        data.setClaimedReward(claimedReward);
                         
                         playerData.put(uuid, data);
                     }
@@ -166,7 +171,7 @@ public class SqliteDatabaseManager implements DatabaseManager {
                     stmt.setString(1, data.getPlayerId().toString());
                     stmt.setString(2, data.getPlayerName());
                     stmt.setBoolean(3, data.isReferralEnabled());
-                    stmt.setBoolean(4, data.hasClaimedPayout());
+                    stmt.setBoolean(4, data.hasClaimedReward());
                     stmt.executeUpdate();
                 }
                 
@@ -259,11 +264,11 @@ public class SqliteDatabaseManager implements DatabaseManager {
             stmt.setString(1, data.getPlayerId().toString());
             stmt.setString(2, data.getPlayerName());
             stmt.setBoolean(3, data.isReferralEnabled());
-            stmt.setBoolean(4, data.hasClaimedPayout());
+            stmt.setBoolean(4, data.hasClaimedReward());
             stmt.executeUpdate();
         }
     }
-    
+
     @Override
     public CompletableFuture<Map<UUID, UUID>> loadReferralMappings() {
         return CompletableFuture.supplyAsync(() -> {
@@ -304,18 +309,6 @@ public class SqliteDatabaseManager implements DatabaseManager {
     }
     
     @Override
-    public CompletableFuture<Void> saveReferralMapping(UUID referredPlayer, UUID referrer) {
-        // This is handled by savePlayerData in SQLite implementation
-        return CompletableFuture.completedFuture(null);
-    }
-    
-    @Override
-    public CompletableFuture<Void> removeReferralMapping(UUID referredPlayer) {
-        // This is handled by savePlayerData in SQLite implementation
-        return CompletableFuture.completedFuture(null);
-    }
-    
-    @Override
     public CompletableFuture<Map<UUID, Long>> loadFirstJoinTimes() {
         return CompletableFuture.supplyAsync(() -> {
             Map<UUID, Long> firstJoinTimes = new HashMap<>();
@@ -353,7 +346,7 @@ public class SqliteDatabaseManager implements DatabaseManager {
                     int rowsAffected = stmt.executeUpdate();
                     if (rowsAffected == 0) {
                         // Player doesn't exist, insert them
-                        sql = "INSERT INTO players (uuid, name, first_join_time) VALUES (?, 'Unknown', ?)";
+                        sql = "INSERT INTO players (uuid, name, referral_enabled, first_join_time) VALUES (?, 'Unknown', FALSE, ?)";
                         try (PreparedStatement insertStmt = connection.prepareStatement(sql)) {
                             insertStmt.setString(1, playerId.toString());
                             insertStmt.setLong(2, timestamp);
@@ -407,7 +400,7 @@ public class SqliteDatabaseManager implements DatabaseManager {
                     int rowsAffected = stmt.executeUpdate();
                     if (rowsAffected == 0) {
                         // Player doesn't exist, insert them
-                        sql = "INSERT INTO players (uuid, name, ip_address) VALUES (?, 'Unknown', ?)";
+                        sql = "INSERT INTO players (uuid, name, referral_enabled, ip_address) VALUES (?, 'Unknown', FALSE, ?)";
                         try (PreparedStatement insertStmt = connection.prepareStatement(sql)) {
                             insertStmt.setString(1, playerId.toString());
                             insertStmt.setString(2, ipAddress);

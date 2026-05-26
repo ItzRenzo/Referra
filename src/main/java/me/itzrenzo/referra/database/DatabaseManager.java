@@ -38,16 +38,6 @@ public interface DatabaseManager {
     CompletableFuture<Map<UUID, UUID>> loadReferralMappings();
     
     /**
-     * Save referral mapping
-     */
-    CompletableFuture<Void> saveReferralMapping(UUID referredPlayer, UUID referrer);
-    
-    /**
-     * Remove referral mapping
-     */
-    CompletableFuture<Void> removeReferralMapping(UUID referredPlayer);
-    
-    /**
      * Load player first join times
      */
     CompletableFuture<Map<UUID, Long>> loadFirstJoinTimes();

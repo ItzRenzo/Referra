@@ -3,11 +3,10 @@
 
 # Database Configuration
 database:
-  # Database type: YML, SQLITE, or MYSQL
-  # YML - Stores data in YAML files (default, no setup required)
+  # Database type: SQLITE or MYSQL
   # SQLITE - Stores data in SQLite database file (lightweight, no server required)
   # MYSQL - Stores data in MySQL database (requires MySQL server)
-  type: YML
+  type: SQLITE
   
   # MySQL Configuration (only used if type is MYSQL)
   mysql:
@@ -50,30 +49,46 @@ discord:
   notifications:
     # Notify when player reaches payout threshold
     threshold-reached: true
-    # Notify when player claims payout
-    payout-claimed: true
     # Notify when referrals are confirmed
     referral-confirmed: false
 
 # Referral Settings
 referral:
   # Required playtime in hours before a referral is confirmed
-  # Default: 168 hours (7 days)
-  # Set to 0 to disable the playtime requirement
-  required-playtime-hours: 168
+  required-playtime-hours: 2
+
+  # Required playtime in hours before a player can use /referral create
+  create-required-playtime-hours: 2
   
   # How often to check for referral confirmations (in minutes)
   # Default: 5 minutes
   check-interval-minutes: 5
   
-  # Minimum referrals required to claim IRL payout
-  # Default: 100
-  payout-threshold: 100
+  # Maximum number of players one person can refer
+  # Default: 1
+  max-referrals-per-player: 1
+
+  # Confirmed referrals needed before the referrer can claim their reward
+  # This is capped to max-referrals-per-player
+  # Default: 1
+  payout-threshold: 1
+
+# Reward commands
+# {player} = player receiving the reward
+# {referrer} = player who referred them
+rewards:
+  referrer:
+    commands:
+      - "shardmanager add {player} 100"
+  referred:
+    commands:
+      - "shardmanager add {player} 50"
 
 # Plugin Messages (customize these if you want)
 messages:
   prefix: "&6[REFERRAL]&r "
   referral-confirmed: "&aReferral confirmed for {player}! Total referrals: {count}"
   playtime-requirement: "&eNote: Referrals are confirmed after {hours} hours of playtime."
-  payout-eligible: "&a&lCongratulations! &r&aYou're now eligible for IRL payout!"
+  payout-eligible: "&a&lCongratulations! &r&aYour referral has been confirmed."
+  reward-ready: "&aYour referrer reward is ready. Run &e/referral claim &ato receive it."
   discord-instructions: "&eJoin our Discord server and create a ticket to claim your reward: &b{invite}"

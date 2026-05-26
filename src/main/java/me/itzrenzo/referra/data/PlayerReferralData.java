@@ -5,24 +5,22 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.List;
-import java.util.ArrayList;
 
 public class PlayerReferralData {
     private final UUID playerId;
     private final String playerName;
-    private final Set<UUID> confirmedReferrals; // Players who have played 7+ days
-    private final Map<UUID, Long> pendingReferrals; // Players pending 7 days (UUID -> first join time)
+    private final Set<UUID> confirmedReferrals;
+    private final Map<UUID, Long> pendingReferrals;
     private boolean referralEnabled;
-    private boolean hasClaimedPayout;
+    private boolean claimedReward;
     
     public PlayerReferralData(UUID playerId, String playerName) {
         this.playerId = playerId;
         this.playerName = playerName;
         this.confirmedReferrals = new HashSet<>();
         this.pendingReferrals = new HashMap<>();
-        this.referralEnabled = true;
-        this.hasClaimedPayout = false;
+        this.referralEnabled = false;
+        this.claimedReward = false;
     }
     
     public UUID getPlayerId() { return playerId; }
@@ -32,10 +30,11 @@ public class PlayerReferralData {
     public Map<UUID, Long> getPendingReferrals() { return pendingReferrals; }
     public int getReferralCount() { return confirmedReferrals.size(); }
     public int getPendingCount() { return pendingReferrals.size(); }
+    public int getTotalReferralCount() { return confirmedReferrals.size() + pendingReferrals.size(); }
     public boolean isReferralEnabled() { return referralEnabled; }
     public void setReferralEnabled(boolean enabled) { this.referralEnabled = enabled; }
-    public boolean hasClaimedPayout() { return hasClaimedPayout; }
-    public void setClaimedPayout(boolean claimed) { this.hasClaimedPayout = claimed; }
+    public boolean hasClaimedReward() { return claimedReward; }
+    public void setClaimedReward(boolean claimedReward) { this.claimedReward = claimedReward; }
     
     public boolean addPendingReferral(UUID referredPlayerId, long firstJoinTime) {
         return pendingReferrals.put(referredPlayerId, firstJoinTime) == null;
@@ -57,28 +56,7 @@ public class PlayerReferralData {
         pendingReferrals.remove(referredPlayerId);
     }
     
-    public boolean removePayoutReferrals(int payoutThreshold) {
-        if (confirmedReferrals.size() < payoutThreshold) {
-            return false; // Not enough referrals to remove
-        }
-        
-        // Convert to list to get first N referrals
-        List<UUID> referralsList = new ArrayList<>(confirmedReferrals);
-        
-        // Remove the first N referrals (where N = payoutThreshold)
-        for (int i = 0; i < payoutThreshold && i < referralsList.size(); i++) {
-            confirmedReferrals.remove(referralsList.get(i));
-        }
-        
-        return true;
-    }
-    
     public boolean canClaimPayout(int payoutThreshold) {
-        return getReferralCount() >= payoutThreshold;
-    }
-    
-    // Keep backward compatibility
-    public boolean canClaimPayout() {
-        return getReferralCount() >= 100;
+        return !claimedReward && getReferralCount() >= payoutThreshold;
     }
 }

@@ -18,14 +18,13 @@ A comprehensive referral system plugin for Minecraft servers that rewards player
 - **Self-Referral Protection**: Players cannot refer themselves
 - **Real-Time Admin Alerts**: Admins receive instant notifications about blocked abuse attempts
 
-### 💰 **Smart Payout System**
-- **Multiple Payouts**: Players can claim multiple rewards as they continue earning referrals
-- **Partial Consumption**: Only the threshold amount of referrals are consumed per payout (e.g., 100 out of 150)
-- **Remaining Referrals**: Players keep extra referrals above the threshold for future payouts
-- **Automatic Notifications**: Discord alerts when players become eligible and when they claim rewards
+### 💰 **Reward System**
+- **Single Referral Slot**: Each player can refer only one other player
+- **Dual Rewards**: Both the referrer and the referred player can receive configurable rewards
+- **Claim Flow for Referrers**: Referrers are notified when their reward is ready and can use `/referral claim`
+- **Config-Driven Commands**: Rewards are fully editable through `config.yml`
 
 ### 🗄️ **Flexible Database Support**
-- **YML**: Simple file-based storage (default, no setup required)
 - **SQLite**: Lightweight database file (perfect for medium servers)
 - **MySQL**: Enterprise-grade database with connection pooling (ideal for large networks)
 - **Synchronous Loading**: Fixed database loading issues on server restart
@@ -39,18 +38,11 @@ A comprehensive referral system plugin for Minecraft servers that rewards player
 - **Configurable Alerts**: Choose which events trigger Discord notifications
 - **Abuse Monitoring**: Notifications when suspicious activity is detected
 
-### 🎮 **Interactive GUI System**
-- **Visual Player Heads**: Real player heads showing all referred players with their status
-- **Detailed Information**: Hover over heads to see playtime, progress, and requirements
-- **Pagination Support**: Navigate through multiple pages for players with many referrals
-- **Smart Organization**: Confirmed referrals shown first, then pending referrals
-
 ### 🖥️ **Player Commands**
 - `/referral create` - Create your referral status (required to receive referrals)
-- `/referral referredby <player>` - Set who referred you to the server
-- `/referral count [player]` - Open interactive GUI showing all referrals with player heads
+- `/referral <player>` - Set who referred you to the server
+- `/referral claim` - Claim your referrer reward after the referral is confirmed
 - `/referral top [page]` - Browse the referral leaderboard
-- `/referral claim` - Claim IRL payout rewards (can be used multiple times)
 - `/referral toggle [on|off]` - Enable/disable your referral system
 - `/referral help` - Display help information
 
@@ -107,7 +99,7 @@ ALTER TABLE players ADD COLUMN ip_address TEXT;
 ```yaml
 # Database Configuration
 database:
-  type: YML  # Options: YML, SQLITE, MYSQL
+  type: SQLITE  # Options: SQLITE, MYSQL
   
   # MySQL Settings (only if type is MYSQL)
   mysql:
@@ -148,8 +140,6 @@ discord:
   notifications:
     # Notify when player reaches payout threshold
     threshold-reached: true
-    # Notify when player claims payout
-    payout-claimed: true
     # Notify when referrals are confirmed
     referral-confirmed: false
 
@@ -162,8 +152,19 @@ referral:
   # How often to check for confirmations (in minutes)
   check-interval-minutes: 5
   
-  # Minimum referrals required for IRL payout
-  payout-threshold: 100
+  # Each player can refer only one person
+  max-referrals-per-player: 1
+
+  # Referrers can claim their reward after one confirmed referral
+  payout-threshold: 1
+
+rewards:
+  referrer:
+    commands:
+      - "give {player} diamond 1"
+  referred:
+    commands:
+      - "give {player} iron_ingot 3"
 ```
 
 ### 🔔 Discord Webhook Setup
@@ -185,18 +186,11 @@ discord:
 
 #### Step 3: Test the Integration
 - Have a player reach the payout threshold
-- Use `/referral claim` to test payout notifications
 - Check your Discord channel for webhook messages
 
 ### Database Setup Examples
 
-#### YML (Default - No Setup Required)
-```yaml
-database:
-  type: YML
-```
-
-#### SQLite (Recommended for Most Servers)
+#### SQLite (Default)
 ```yaml
 database:
   type: SQLITE
@@ -223,10 +217,9 @@ database:
 ### For Players
 ```
 /referral create                # Initialize your referral status
-/referral referredby Steve       # Set Steve as your referrer
-/referral count                  # Check your referral stats
+/referral Steve                  # Set Steve as your referrer
+/referral claim                  # Claim your reward after your referral confirms
 /referral top                    # View leaderboard
-/referral claim                  # Claim your 100+ referral reward (repeatable)
 /referral toggle off             # Temporarily disable your referrals
 ```
 
@@ -242,14 +235,9 @@ database:
 The plugin sends rich Discord embeds for important events:
 
 ### 🎯 **Player Reaches Threshold**
-- Triggered when a player reaches the payout threshold (default: 100 referrals)
+- Triggered when a player reaches the reward threshold
 - Includes player name, referral count, and eligibility status
-- Alerts admins that the player can now claim their reward
-
-### 💰 **Payout Claimed**
-- Triggered when a player uses `/referral claim`
-- Shows referrals used for payout and remaining count
-- Alerts admins to process the IRL reward
+- Lets the referrer know they can run `/referral claim`
 
 ### 🚨 **Anti-Abuse Alerts**
 - Triggered when same-IP referral attempts are blocked
@@ -324,15 +312,14 @@ Player gets 50 more referrals (200 total) → Can claim again
 ## 📊 How It Works
 
 1. **Player A creates referral status** using `/referral create`
-2. **Player B joins the server** and uses `/referral referredby PlayerA`
+2. **Player B joins the server** and uses `/referral PlayerA`
 3. **IP Check**: System verifies A and B don't share the same IP address
 4. **Referral starts as "pending"** until playtime requirement is met
 5. **System tracks Player B's playtime** using Minecraft's built-in statistics
 6. **After required hours played**, referral automatically becomes "confirmed"
 7. **Player A gets notified** when their referral is confirmed
 8. **At 100+ referrals**, Discord webhook alerts admins automatically
-9. **Player A uses `/referral claim`** to request payout (can repeat)
-10. **Only threshold amount consumed**, remaining referrals kept for future payouts
+9. **Once the referral is confirmed**, Player A is told to run `/referral claim`
 
 ## 🛡️ Permissions
 
