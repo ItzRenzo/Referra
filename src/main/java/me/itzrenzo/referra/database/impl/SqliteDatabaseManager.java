@@ -5,20 +5,28 @@ import me.itzrenzo.referra.database.DatabaseManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.sql.*;
-import java.util.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class SqliteDatabaseManager implements DatabaseManager {
     private final JavaPlugin plugin;
     private final String filename;
-    private Connection connection;
-    
+    private String jdbcUrl;
+
     public SqliteDatabaseManager(JavaPlugin plugin, String filename) {
         this.plugin = plugin;
         this.filename = filename;
     }
-    
+
     @Override
     public CompletableFuture<Void> initialize() {
         return CompletableFuture.runAsync(() -> {
@@ -27,10 +35,8 @@ public class SqliteDatabaseManager implements DatabaseManager {
 
                 File dbFile = new File(plugin.getDataFolder(), filename);
                 plugin.getDataFolder().mkdirs();
-                
-                String url = "jdbc:sqlite:" + dbFile.getAbsolutePath();
-                connection = DriverManager.getConnection(url);
-                
+                jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath();
+
                 createTables();
                 plugin.getLogger().info("SQLite database initialized successfully: " + filename);
             } catch (ClassNotFoundException | SQLException e) {
@@ -39,7 +45,11 @@ public class SqliteDatabaseManager implements DatabaseManager {
             }
         });
     }
-    
+
+    private Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(jdbcUrl);
+    }
+
     private void createTables() throws SQLException {
         String createPlayersTable = """
             CREATE TABLE IF NOT EXISTS players (
@@ -51,7 +61,7 @@ public class SqliteDatabaseManager implements DatabaseManager {
                 ip_address TEXT
             )
         """;
-        
+
         String createConfirmedReferralsTable = """
             CREATE TABLE IF NOT EXISTS confirmed_referrals (
                 referrer_uuid TEXT,
@@ -60,7 +70,7 @@ public class SqliteDatabaseManager implements DatabaseManager {
                 FOREIGN KEY (referrer_uuid) REFERENCES players(uuid)
             )
         """;
-        
+
         String createPendingReferralsTable = """
             CREATE TABLE IF NOT EXISTS pending_referrals (
                 referrer_uuid TEXT,
@@ -70,204 +80,184 @@ public class SqliteDatabaseManager implements DatabaseManager {
                 FOREIGN KEY (referrer_uuid) REFERENCES players(uuid)
             )
         """;
-        
-        try (Statement stmt = connection.createStatement()) {
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
             stmt.execute(createPlayersTable);
             stmt.execute(createConfirmedReferralsTable);
             stmt.execute(createPendingReferralsTable);
             stmt.execute("ALTER TABLE players ADD COLUMN claimed_payout BOOLEAN DEFAULT FALSE");
         } catch (SQLException e) {
-            if (!e.getMessage().toLowerCase(Locale.ROOT).contains("duplicate column")) {
+            String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase(Locale.ROOT);
+            if (!message.contains("duplicate column")) {
                 throw e;
             }
         }
     }
-    
+
     @Override
     public void close() {
-        try {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
-            }
-        } catch (SQLException e) {
-            plugin.getLogger().warning("Error closing SQLite connection: " + e.getMessage());
-        }
     }
-    
+
     @Override
     public CompletableFuture<Map<UUID, PlayerReferralData>> loadAllPlayerData() {
         return CompletableFuture.supplyAsync(() -> {
             Map<UUID, PlayerReferralData> playerData = new HashMap<>();
-            
-            try {
-                // Load basic player data
+
+            try (Connection conn = getConnection()) {
                 String sql = "SELECT uuid, name, referral_enabled, claimed_payout FROM players";
-                try (PreparedStatement stmt = connection.prepareStatement(sql);
+                try (PreparedStatement stmt = conn.prepareStatement(sql);
                      ResultSet rs = stmt.executeQuery()) {
-                    
+
                     while (rs.next()) {
                         UUID uuid = UUID.fromString(rs.getString("uuid"));
                         String name = rs.getString("name");
                         boolean enabled = rs.getBoolean("referral_enabled");
                         boolean claimedReward = rs.getBoolean("claimed_payout");
-                        
+
                         PlayerReferralData data = new PlayerReferralData(uuid, name);
                         data.setReferralEnabled(enabled);
                         data.setClaimedReward(claimedReward);
-                        
                         playerData.put(uuid, data);
                     }
                 }
-                
-                // Load confirmed referrals
+
                 sql = "SELECT referrer_uuid, referred_uuid FROM confirmed_referrals";
-                try (PreparedStatement stmt = connection.prepareStatement(sql);
+                try (PreparedStatement stmt = conn.prepareStatement(sql);
                      ResultSet rs = stmt.executeQuery()) {
-                    
+
                     while (rs.next()) {
                         UUID referrerUuid = UUID.fromString(rs.getString("referrer_uuid"));
                         UUID referredUuid = UUID.fromString(rs.getString("referred_uuid"));
-                        
+
                         PlayerReferralData data = playerData.get(referrerUuid);
                         if (data != null) {
                             data.addReferral(referredUuid);
                         }
                     }
                 }
-                
-                // Load pending referrals
+
                 sql = "SELECT referrer_uuid, referred_uuid, timestamp FROM pending_referrals";
-                try (PreparedStatement stmt = connection.prepareStatement(sql);
+                try (PreparedStatement stmt = conn.prepareStatement(sql);
                      ResultSet rs = stmt.executeQuery()) {
-                    
+
                     while (rs.next()) {
                         UUID referrerUuid = UUID.fromString(rs.getString("referrer_uuid"));
                         UUID referredUuid = UUID.fromString(rs.getString("referred_uuid"));
                         long timestamp = rs.getLong("timestamp");
-                        
+
                         PlayerReferralData data = playerData.get(referrerUuid);
                         if (data != null) {
                             data.addPendingReferral(referredUuid, timestamp);
                         }
                     }
                 }
-                
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error loading player data from SQLite: " + e.getMessage());
                 throw new RuntimeException(e);
             }
-            
+
             return playerData;
         });
     }
-    
+
     @Override
     public CompletableFuture<Void> savePlayerData(PlayerReferralData data) {
         return CompletableFuture.runAsync(() -> {
+            Connection conn = null;
             try {
-                connection.setAutoCommit(false);
-                
-                // Save basic player data
-                String sql = "INSERT OR REPLACE INTO players (uuid, name, referral_enabled, claimed_payout) VALUES (?, ?, ?, ?)";
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, data.getPlayerId().toString());
-                    stmt.setString(2, data.getPlayerName());
-                    stmt.setBoolean(3, data.isReferralEnabled());
-                    stmt.setBoolean(4, data.hasClaimedReward());
-                    stmt.executeUpdate();
-                }
-                
-                // Clear existing referrals
-                sql = "DELETE FROM confirmed_referrals WHERE referrer_uuid = ?";
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, data.getPlayerId().toString());
-                    stmt.executeUpdate();
-                }
-                
-                sql = "DELETE FROM pending_referrals WHERE referrer_uuid = ?";
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, data.getPlayerId().toString());
-                    stmt.executeUpdate();
-                }
-                
-                // Save confirmed referrals
-                if (!data.getConfirmedReferrals().isEmpty()) {
-                    sql = "INSERT INTO confirmed_referrals (referrer_uuid, referred_uuid) VALUES (?, ?)";
-                    try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                        for (UUID referredUuid : data.getConfirmedReferrals()) {
-                            stmt.setString(1, data.getPlayerId().toString());
-                            stmt.setString(2, referredUuid.toString());
-                            stmt.addBatch();
-                        }
-                        stmt.executeBatch();
-                    }
-                }
-                
-                // Save pending referrals
-                if (!data.getPendingReferrals().isEmpty()) {
-                    sql = "INSERT INTO pending_referrals (referrer_uuid, referred_uuid, timestamp) VALUES (?, ?, ?)";
-                    try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                        for (Map.Entry<UUID, Long> entry : data.getPendingReferrals().entrySet()) {
-                            stmt.setString(1, data.getPlayerId().toString());
-                            stmt.setString(2, entry.getKey().toString());
-                            stmt.setLong(3, entry.getValue());
-                            stmt.addBatch();
-                        }
-                        stmt.executeBatch();
-                    }
-                }
-                
-                connection.commit();
-                connection.setAutoCommit(true);
-                
+                conn = getConnection();
+                conn.setAutoCommit(false);
+                savePlayerDataSync(conn, data, true);
+                conn.commit();
             } catch (SQLException e) {
-                try {
-                    connection.rollback();
-                    connection.setAutoCommit(true);
-                } catch (SQLException rollbackEx) {
-                    plugin.getLogger().severe("Error rolling back transaction: " + rollbackEx.getMessage());
-                }
+                rollbackQuietly(conn, "Error rolling back transaction");
                 plugin.getLogger().severe("Error saving player data to SQLite: " + e.getMessage());
                 throw new RuntimeException(e);
+            } finally {
+                resetAutoCommitAndClose(conn);
             }
         });
     }
-    
+
     @Override
     public CompletableFuture<Void> saveAllPlayerData(Map<UUID, PlayerReferralData> playerData) {
         return CompletableFuture.runAsync(() -> {
+            Connection conn = null;
             try {
-                connection.setAutoCommit(false);
-                
+                conn = getConnection();
+                conn.setAutoCommit(false);
+
                 for (PlayerReferralData data : playerData.values()) {
-                    savePlayerDataSync(data);
+                    savePlayerDataSync(conn, data, false);
                 }
-                
-                connection.commit();
-                connection.setAutoCommit(true);
-                
+
+                conn.commit();
             } catch (SQLException e) {
-                try {
-                    connection.rollback();
-                    connection.setAutoCommit(true);
-                } catch (SQLException rollbackEx) {
-                    plugin.getLogger().severe("Error rolling back bulk save transaction: " + rollbackEx.getMessage());
-                }
+                rollbackQuietly(conn, "Error rolling back bulk save transaction");
                 plugin.getLogger().severe("Error saving all player data to SQLite: " + e.getMessage());
                 throw new RuntimeException(e);
+            } finally {
+                resetAutoCommitAndClose(conn);
             }
         });
     }
-    
-    private void savePlayerDataSync(PlayerReferralData data) throws SQLException {
-        // This is a synchronous version of savePlayerData for use in transactions
-        String sql = "INSERT OR REPLACE INTO players (uuid, name, referral_enabled, claimed_payout) VALUES (?, ?, ?, ?)";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+
+    private void savePlayerDataSync(Connection conn, PlayerReferralData data, boolean rewriteReferrals) throws SQLException {
+        String sql = "INSERT INTO players (uuid, name, referral_enabled, claimed_payout) VALUES (?, ?, ?, ?) " +
+                "ON CONFLICT(uuid) DO UPDATE SET name = excluded.name, referral_enabled = excluded.referral_enabled, claimed_payout = excluded.claimed_payout";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, data.getPlayerId().toString());
             stmt.setString(2, data.getPlayerName());
             stmt.setBoolean(3, data.isReferralEnabled());
             stmt.setBoolean(4, data.hasClaimedReward());
             stmt.executeUpdate();
+        }
+
+        if (!rewriteReferrals) {
+            clearAndInsertReferrals(conn, data);
+            return;
+        }
+
+        clearAndInsertReferrals(conn, data);
+    }
+
+    private void clearAndInsertReferrals(Connection conn, PlayerReferralData data) throws SQLException {
+        String sql = "DELETE FROM confirmed_referrals WHERE referrer_uuid = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, data.getPlayerId().toString());
+            stmt.executeUpdate();
+        }
+
+        sql = "DELETE FROM pending_referrals WHERE referrer_uuid = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, data.getPlayerId().toString());
+            stmt.executeUpdate();
+        }
+
+        if (!data.getConfirmedReferrals().isEmpty()) {
+            sql = "INSERT INTO confirmed_referrals (referrer_uuid, referred_uuid) VALUES (?, ?)";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                for (UUID referredUuid : data.getConfirmedReferrals()) {
+                    stmt.setString(1, data.getPlayerId().toString());
+                    stmt.setString(2, referredUuid.toString());
+                    stmt.addBatch();
+                }
+                stmt.executeBatch();
+            }
+        }
+
+        if (!data.getPendingReferrals().isEmpty()) {
+            sql = "INSERT INTO pending_referrals (referrer_uuid, referred_uuid, timestamp) VALUES (?, ?, ?)";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                for (Map.Entry<UUID, Long> entry : data.getPendingReferrals().entrySet()) {
+                    stmt.setString(1, data.getPlayerId().toString());
+                    stmt.setString(2, entry.getKey().toString());
+                    stmt.setLong(3, entry.getValue());
+                    stmt.addBatch();
+                }
+                stmt.executeBatch();
+            }
         }
     }
 
@@ -275,151 +265,158 @@ public class SqliteDatabaseManager implements DatabaseManager {
     public CompletableFuture<Map<UUID, UUID>> loadReferralMappings() {
         return CompletableFuture.supplyAsync(() -> {
             Map<UUID, UUID> mappings = new HashMap<>();
-            
-            try {
-                // Load confirmed referrals
+
+            try (Connection conn = getConnection()) {
                 String sql = "SELECT referrer_uuid, referred_uuid FROM confirmed_referrals";
-                try (PreparedStatement stmt = connection.prepareStatement(sql);
+                try (PreparedStatement stmt = conn.prepareStatement(sql);
                      ResultSet rs = stmt.executeQuery()) {
-                    
+
                     while (rs.next()) {
                         UUID referrerUuid = UUID.fromString(rs.getString("referrer_uuid"));
                         UUID referredUuid = UUID.fromString(rs.getString("referred_uuid"));
                         mappings.put(referredUuid, referrerUuid);
                     }
                 }
-                
-                // Load pending referrals
+
                 sql = "SELECT referrer_uuid, referred_uuid FROM pending_referrals";
-                try (PreparedStatement stmt = connection.prepareStatement(sql);
+                try (PreparedStatement stmt = conn.prepareStatement(sql);
                      ResultSet rs = stmt.executeQuery()) {
-                    
+
                     while (rs.next()) {
                         UUID referrerUuid = UUID.fromString(rs.getString("referrer_uuid"));
                         UUID referredUuid = UUID.fromString(rs.getString("referred_uuid"));
                         mappings.put(referredUuid, referrerUuid);
                     }
                 }
-                
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error loading referral mappings from SQLite: " + e.getMessage());
                 throw new RuntimeException(e);
             }
-            
+
             return mappings;
         });
     }
-    
+
     @Override
     public CompletableFuture<Map<UUID, Long>> loadFirstJoinTimes() {
         return CompletableFuture.supplyAsync(() -> {
             Map<UUID, Long> firstJoinTimes = new HashMap<>();
-            
-            try {
+
+            try (Connection conn = getConnection()) {
                 String sql = "SELECT uuid, first_join_time FROM players WHERE first_join_time IS NOT NULL";
-                try (PreparedStatement stmt = connection.prepareStatement(sql);
+                try (PreparedStatement stmt = conn.prepareStatement(sql);
                      ResultSet rs = stmt.executeQuery()) {
-                    
+
                     while (rs.next()) {
                         UUID uuid = UUID.fromString(rs.getString("uuid"));
                         long timestamp = rs.getLong("first_join_time");
                         firstJoinTimes.put(uuid, timestamp);
                     }
                 }
-                
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error loading first join times from SQLite: " + e.getMessage());
                 throw new RuntimeException(e);
             }
-            
+
             return firstJoinTimes;
         });
     }
-    
+
     @Override
     public CompletableFuture<Void> saveFirstJoinTime(UUID playerId, long timestamp) {
         return CompletableFuture.runAsync(() -> {
-            try {
-                String sql = "UPDATE players SET first_join_time = ? WHERE uuid = ?";
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setLong(1, timestamp);
-                    stmt.setString(2, playerId.toString());
-                    
-                    int rowsAffected = stmt.executeUpdate();
-                    if (rowsAffected == 0) {
-                        // Player doesn't exist, insert them
-                        sql = "INSERT INTO players (uuid, name, referral_enabled, first_join_time) VALUES (?, 'Unknown', FALSE, ?)";
-                        try (PreparedStatement insertStmt = connection.prepareStatement(sql)) {
-                            insertStmt.setString(1, playerId.toString());
-                            insertStmt.setLong(2, timestamp);
-                            insertStmt.executeUpdate();
-                        }
-                    }
-                }
-                
+            try (Connection conn = getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(
+                         "INSERT INTO players (uuid, name, referral_enabled, claimed_payout, first_join_time) VALUES (?, 'Unknown', FALSE, FALSE, ?) " +
+                                 "ON CONFLICT(uuid) DO UPDATE SET first_join_time = excluded.first_join_time")) {
+                stmt.setString(1, playerId.toString());
+                stmt.setLong(2, timestamp);
+                stmt.executeUpdate();
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error saving first join time to SQLite: " + e.getMessage());
                 throw new RuntimeException(e);
             }
         });
     }
-    
+
     @Override
     public CompletableFuture<Map<UUID, String>> loadPlayerIPs() {
         return CompletableFuture.supplyAsync(() -> {
             Map<UUID, String> playerIPs = new HashMap<>();
-            
-            try {
+
+            try (Connection conn = getConnection()) {
                 String sql = "SELECT uuid, ip_address FROM players WHERE ip_address IS NOT NULL";
-                try (PreparedStatement stmt = connection.prepareStatement(sql);
+                try (PreparedStatement stmt = conn.prepareStatement(sql);
                      ResultSet rs = stmt.executeQuery()) {
-                    
+
                     while (rs.next()) {
                         UUID uuid = UUID.fromString(rs.getString("uuid"));
                         String ipAddress = rs.getString("ip_address");
                         playerIPs.put(uuid, ipAddress);
                     }
                 }
-                
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error loading player IPs from SQLite: " + e.getMessage());
                 throw new RuntimeException(e);
             }
-            
+
             return playerIPs;
         });
     }
-    
+
     @Override
     public CompletableFuture<Void> savePlayerIP(UUID playerId, String ipAddress) {
         return CompletableFuture.runAsync(() -> {
-            try {
-                String sql = "UPDATE players SET ip_address = ? WHERE uuid = ?";
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, ipAddress);
-                    stmt.setString(2, playerId.toString());
-                    
-                    int rowsAffected = stmt.executeUpdate();
-                    if (rowsAffected == 0) {
-                        // Player doesn't exist, insert them
-                        sql = "INSERT INTO players (uuid, name, referral_enabled, ip_address) VALUES (?, 'Unknown', FALSE, ?)";
-                        try (PreparedStatement insertStmt = connection.prepareStatement(sql)) {
-                            insertStmt.setString(1, playerId.toString());
-                            insertStmt.setString(2, ipAddress);
-                            insertStmt.executeUpdate();
-                        }
-                    }
-                }
-                
+            try (Connection conn = getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(
+                         "INSERT INTO players (uuid, name, referral_enabled, claimed_payout, ip_address) VALUES (?, 'Unknown', FALSE, FALSE, ?) " +
+                                 "ON CONFLICT(uuid) DO UPDATE SET ip_address = excluded.ip_address")) {
+                stmt.setString(1, playerId.toString());
+                stmt.setString(2, ipAddress);
+                stmt.executeUpdate();
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error saving player IP to SQLite: " + e.getMessage());
                 throw new RuntimeException(e);
             }
         });
     }
-    
+
     @Override
     public String getDatabaseType() {
         return "SQLITE";
+    }
+
+    private void rollbackQuietly(Connection conn, String messagePrefix) {
+        if (conn == null) {
+            return;
+        }
+
+        try {
+            if (!conn.getAutoCommit()) {
+                conn.rollback();
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().severe(messagePrefix + ": " + e.getMessage());
+        }
+    }
+
+    private void resetAutoCommitAndClose(Connection conn) {
+        if (conn == null) {
+            return;
+        }
+
+        try {
+            if (!conn.getAutoCommit()) {
+                conn.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().severe("Error resetting SQLite auto-commit: " + e.getMessage());
+        }
+
+        try {
+            conn.close();
+        } catch (SQLException e) {
+            plugin.getLogger().warning("Error closing SQLite connection: " + e.getMessage());
+        }
     }
 }

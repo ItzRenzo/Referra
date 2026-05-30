@@ -75,7 +75,6 @@ referral:
 
 # Reward commands
 # {player} = player receiving the reward
-# {referrer} = player who referred them
 rewards:
   referrer:
     commands:

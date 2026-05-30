@@ -158,6 +158,11 @@ public class ReferralCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        if (dataManager.wouldCreateReferralCycle(referrer.getUniqueId(), player.getUniqueId())) {
+            player.sendMessage(Component.text("Referral blocked: you cannot create a referral loop.").color(NamedTextColor.RED));
+            return;
+        }
+
         player.sendMessage(Component.text("Failed to add referral. You may already be referred by someone.").color(NamedTextColor.RED));
     }
 

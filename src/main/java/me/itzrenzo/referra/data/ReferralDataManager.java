@@ -200,6 +200,11 @@ public class ReferralDataManager {
             return false;
         }
 
+        if (wouldCreateReferralCycle(referrerId, referredId)) {
+            plugin.getLogger().warning("Blocked referral attempt: Cycle detected for referrer " + referrerId + " and referred " + referredId);
+            return false;
+        }
+
         if (hasSameIPReferral(referrerId, referredId)) {
             plugin.getLogger().warning("Blocked referral attempt: Same IP detected for referrer " + referrerId + " and referred " + referredId);
             return false;
@@ -211,6 +216,17 @@ public class ReferralDataManager {
         recordFirstJoin(referredId);
         databaseManager.savePlayerData(referrerData);
         return true;
+    }
+
+    public boolean wouldCreateReferralCycle(UUID referrerId, UUID referredId) {
+        UUID current = referrerId;
+        while (current != null) {
+            if (current.equals(referredId)) {
+                return true;
+            }
+            current = referredBy.get(current);
+        }
+        return false;
     }
 
     public void checkAndConfirmReferrals(Player player) {
